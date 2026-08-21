@@ -17,6 +17,10 @@ vi.mock("@/entities/session", () => ({
   getCurrentSession: mocks.getCurrentSession,
 }));
 
+vi.mock("@/server/rate-limit/redis-rate-limit", () => ({
+  allowRequest: vi.fn(async () => true),
+}));
+
 import { POST } from "./route";
 
 describe("POST /api/items", () => {

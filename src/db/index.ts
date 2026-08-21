@@ -1,5 +1,3 @@
-import "server-only";
-
 import { envServer } from "@/config/env";
 
 import { createDatabase } from "./client";

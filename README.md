@@ -43,22 +43,75 @@
    - `DIRECT_URL` — session pooler / пряме підключення для Drizzle Kit.
    - Не коміть `.env.local` і реальні секрети.
 
-3. Створи таблиці та заповни каталог:
+3. Застосуй закомічені міграції та заповни каталог:
 
    ```bash
-   npm run db:generate
-   npm run db:push
+   npm run db:migrate
    npm run db:security
    npm run db:seed
    ```
 
-4. Запусти застосунок:
+   `npm run db:generate` потрібна лише тоді, коли ти змінив Drizzle schema і хочеш створити **нову** migration. `npm run db:push` не використовуй для production або для цього контрольованого локального сценарію.
+
+4. Запусти застосунок і воркер у різних терміналах:
+
+   **Термінал 1 — Next.js UI та API:**
 
    ```bash
    npm run dev
    ```
 
-   Відкрий [http://localhost:3000/items](http://localhost:3000/items).
+   **Термінал 2 — Redis** (лише якщо не використовуєш віддалений Upstash):
+
+   ```bash
+   docker compose up -d redis
+   ```
+
+   **Термінал 3 — BullMQ worker:**
+
+   ```bash
+   npm run worker
+   ```
+
+   Якщо використовується Upstash через `REDIS_URL`, термінал 2 не потрібен. `npm run worker` explicitly завантажує `.env.local` до старту standalone Node-процесу. У production ті самі змінні передаються середовищем платформи, а не файлом.
+
+### Redis: локально або Upstash
+
+Застосунок використовує `ioredis` і BullMQ, тому змінна `REDIS_URL` завжди має містити **TCP Redis URL**.
+
+Локальний Redis (Docker або Redis-сумісний сервер для Windows):
+
+```env
+REDIS_URL="redis://localhost:6379"
+```
+
+Upstash Redis через TLS:
+
+```env
+REDIS_URL="rediss://default:<UPSTASH_PASSWORD>@<UPSTASH_HOST>:6379"
+```
+
+Зберігайте це значення лише в `.env.local`. `UPSTASH_REDIS_REST_URL` і `UPSTASH_REDIS_REST_TOKEN` не підходять для BullMQ: це REST credentials, а worker потребує TCP Redis-з'єднання.
+
+Після зміни `REDIS_URL` або Redis-конфігурації **обов'язково перезапусти і Next.js, і worker**. У development клієнт Redis зберігається в `globalThis`, тому HMR не створює нове з'єднання автоматично:
+
+```bash
+# у кожному з терміналів з Next.js / worker
+Ctrl + C
+npm run dev       # термінал 1
+npm run worker    # термінал 3
+```
+
+Відкрий [http://localhost:3000/items](http://localhost:3000/items).
+
+### Типові помилки запуску
+
+| Повідомлення | Причина та дія |
+| --- | --- |
+| `Stream isn't writeable and enableOfflineQueue options is false` | Запущено застарілий процес Next.js або worker зі старою конфігурацією Redis. Зупини процес через `Ctrl + C` і запусти його знову. Також перевір, що `REDIS_URL` — TCP URL `redis://` або `rediss://`, не Upstash REST URL. |
+| `Custom Id cannot contain :` | Працює застарілий worker. Онови код і перезапусти саме `npm run worker`; новий код створює BullMQ `jobId` без `:`. |
+| `relation "outbox_events" does not exist` | Не застосовані outbox migrations. Виконай `npm run db:migrate` з коректним `DIRECT_URL`, потім перезапусти worker. |
+| `Worker ready { queue: 'catalog' }` | Це нормальне повідомлення: воркер підключився до черги й очікує задачі. |
 
 ## Команди
 
@@ -70,10 +123,31 @@
 | `npm test` | Vitest-тести |
 | `npm run db:generate` | створити SQL-міграцію Drizzle |
 | `npm run db:push` | застосувати схему до БД |
+| `npm run db:migrate` | застосувати вже закомічені Drizzle migrations (production) |
 | `npm run db:security` | увімкнути RLS і закрити Data API доступ до таблиць |
 | `npm run db:security:verify` | перевірити RLS і відсутність Data API `SELECT` доступу |
 | `npm run db:seed` | додати 10 тестових фільмів |
 | `npm run test:e2e:local` | перевірити register/login/favorites через локальний dev server |
+| `npm run worker` | окремий BullMQ worker для Trending і прогріву кешу |
+
+### Production migrations
+
+Перед deploy нової версії застосунку застосуйте **вже закомічені** SQL migrations до production БД. Виконуйте це один раз у CI/CD або в захищеному terminal, де `DIRECT_URL` вказує на production Supabase direct/session-pooler URL:
+
+```bash
+npm ci
+npm run db:migrate
+```
+
+Для поточного Redis/outbox релізу обов'язкові migrations `drizzle/0002_supreme_giant_man.sql`–`drizzle/0005_outbox_cleanup_index.sql`.
+
+Не використовуйте `npm run db:push` у production: ця команда синхронізує schema напряму і не є контрольованим migration rollout. Після успішної міграції deploy API, а worker запускайте окремим процесом:
+
+```bash
+npm run build
+npm run start
+npm run worker
+```
 
 ## Архітектура
 
@@ -92,6 +166,11 @@ src/
 `src/views` використовується замість FSD-папки `src/pages`, оскільки `src/pages` є зарезервованою директорією Next.js для Pages Router.
 
 ### Дані та кеш
+
+- Redis використовується як cache-aside: cache miss читає Postgres, а результат записується з TTL; недоступний Redis не ламає каталог, бо є fallback у БД.
+- Ключі версіоновані (`cat:v1:*`); список має TTL 60 с, деталі — 300 с, а негативний кеш 404 — 30 с.
+- Single-flight Redis lock з TTL захищає гарячі ключі від cache stampede; lock звільняється лише власником token через атомарний Lua script.
+- BullMQ worker перераховує favorites і підтримує Redis ZSET `trending:items`; Postgres завжди лишається джерелом істини.
 
 - Початкові списки і деталі читаються серверними компонентами через Drizzle.
 - Публічний список `items` має Next Data Cache з revalidation раз на 60 секунд; персональні favorites не кешуються на сервері між користувачами.

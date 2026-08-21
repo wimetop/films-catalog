@@ -8,7 +8,7 @@ const databaseUrl = process.env.DIRECT_URL;
 if (!databaseUrl) throw new Error("DIRECT_URL is not defined");
 
 const sql = postgres(databaseUrl, { prepare: false });
-const protectedTables = ["user", "session", "account", "verification", "items", "favorites"];
+const protectedTables = ["user", "session", "account", "verification", "items", "favorites", "outbox_events"];
 
 async function verifySecurity() {
   const rows = await sql<{ tableName: string; rowSecurityEnabled: boolean; dataApiAccess: boolean }[]>`

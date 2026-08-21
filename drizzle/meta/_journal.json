@@ -15,6 +15,34 @@
       "when": 1787241033923,
       "tag": "0001_concerned_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787336157020,
+      "tag": "0002_supreme_giant_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787336614862,
+      "tag": "0003_bizarre_xorn",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787341200000,
+      "tag": "0004_secure_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787341800000,
+      "tag": "0005_outbox_cleanup_index",
+      "breakpoints": true
     }
   ]
 }

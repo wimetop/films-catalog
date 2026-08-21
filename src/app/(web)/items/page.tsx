@@ -6,8 +6,12 @@ import { favoriteKeys } from "@/entities/favorite/model/query-keys";
 import { getItems } from "@/entities/item";
 import { itemKeys } from "@/entities/item/model/query-keys";
 import { getCurrentSession } from "@/entities/session";
+import { getTrendingItems } from "@/entities/trending/api/server";
+import { trendingKeys } from "@/entities/trending/model/query-keys";
 import { getQueryClient } from "@/shared/lib/react-query/get-query-client";
 import { CatalogPage } from "@/views/catalog/ui/catalog-page";
+
+export const dynamic = "force-dynamic";
 
 export default async function ItemsPage() {
   return (
@@ -22,8 +26,9 @@ export default async function ItemsPage() {
 async function ItemsContent() {
   const queryClient = getQueryClient();
   const [, session] = await Promise.all([
-    queryClient.prefetchQuery({ queryKey: itemKeys.all, queryFn: getItems }),
+    queryClient.prefetchQuery({ queryKey: itemKeys.all, queryFn: () => getItems() }),
     getCurrentSession(),
+    queryClient.prefetchQuery({ queryKey: trendingKeys.all, queryFn: getTrendingItems }),
   ]);
 
   if (session) {

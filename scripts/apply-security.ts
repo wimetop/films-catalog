@@ -16,7 +16,8 @@ async function applySecurity() {
   await sql.unsafe('ALTER TABLE "verification" ENABLE ROW LEVEL SECURITY');
   await sql.unsafe('ALTER TABLE "items" ENABLE ROW LEVEL SECURITY');
   await sql.unsafe('ALTER TABLE "favorites" ENABLE ROW LEVEL SECURITY');
-  await sql.unsafe('REVOKE ALL ON TABLE "user", "session", "account", "verification", "items", "favorites" FROM anon, authenticated');
+  await sql.unsafe('ALTER TABLE "outbox_events" ENABLE ROW LEVEL SECURITY');
+  await sql.unsafe('REVOKE ALL ON TABLE "user", "session", "account", "verification", "items", "favorites", "outbox_events" FROM anon, authenticated');
 }
 
 applySecurity()

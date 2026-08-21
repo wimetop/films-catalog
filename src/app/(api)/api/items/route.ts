@@ -2,9 +2,22 @@ import { NextResponse } from "next/server";
 
 import { createItem, getItems, revalidateCatalog } from "@/entities/item";
 import { getCurrentSession } from "@/entities/session";
+import { allowRequest, requestRateLimitIdentity } from "@/server/rate-limit/redis-rate-limit";
 
-export async function GET() {
-  return NextResponse.json(await getItems());
+function positiveInt(value: string | null, fallback: number, maximum: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
+}
+
+export async function GET(request: Request) {
+  if (!await allowRequest(`items:${requestRateLimitIdentity(request)}`)) return NextResponse.json({ message: "Too many requests" }, { status: 429 });
+  const { searchParams } = new URL(request.url);
+  const pageValue = searchParams.get("page");
+  const pageSizeValue = searchParams.get("pageSize");
+  if (!pageValue && !pageSizeValue) return NextResponse.json(await getItems());
+  const page = positiveInt(pageValue, 1, 10_000);
+  const pageSize = positiveInt(pageSizeValue, 20, 100);
+  return NextResponse.json({ items: await getItems(page, pageSize), page, pageSize });
 }
 
 function readText(source: Record<string, unknown>, key: string): string | null {
@@ -43,7 +56,7 @@ export async function POST(request: Request) {
     title,
   });
 
-  revalidateCatalog();
+  await revalidateCatalog();
 
   return NextResponse.json(created, { status: 201 });
 }
