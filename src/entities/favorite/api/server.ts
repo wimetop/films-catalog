@@ -26,6 +26,15 @@ export async function getFavoriteItems(userId: string): Promise<Item[]> {
   return favoriteItems.map(serializeItem);
 }
 
+export async function getFavoriteItemIds(userId: string): Promise<string[]> {
+  const favoriteRows = await db
+    .select({ itemId: favorites.itemId })
+    .from(favorites)
+    .where(eq(favorites.userId, userId));
+
+  return favoriteRows.map((favorite) => favorite.itemId);
+}
+
 export async function addFavorite(userId: string, itemId: string) {
   const [item] = await db
     .select({ id: items.id })

@@ -1,3 +1,4 @@
 export const favoriteKeys = {
-  all: (userId: string) => ["favorites", userId] as const,
+  ids: (userId: string) => ["favorites", userId, "ids"] as const,
+  list: (userId: string) => ["favorites", userId, "list"] as const,
 };

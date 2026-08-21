@@ -9,5 +9,6 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const fetchFavorites = () => request<Item[]>("/api/favorites");
+export const fetchFavoriteIds = () => request<string[]>("/api/favorites/ids");
 export const addFavoriteRequest = (itemId: string) => request<{ ok: true }>("/api/favorites", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ itemId }) });
 export const removeFavoriteRequest = (itemId: string) => request<{ ok: true }>(`/api/favorites/${itemId}`, { method: "DELETE" });

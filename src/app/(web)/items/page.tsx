@@ -1,13 +1,41 @@
-import { getFavoriteItems } from "@/entities/favorite/api/server";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { Suspense } from "react";
+
+import { getFavoriteItemIds } from "@/entities/favorite/api/server";
+import { favoriteKeys } from "@/entities/favorite/model/query-keys";
 import { getItems } from "@/entities/item";
+import { itemKeys } from "@/entities/item/model/query-keys";
 import { getCurrentSession } from "@/entities/session";
+import { getQueryClient } from "@/shared/lib/react-query/get-query-client";
 import { CatalogPage } from "@/views/catalog/ui/catalog-page";
 
-export const dynamic = "force-dynamic";
-
 export default async function ItemsPage() {
-  const [items, session] = await Promise.all([getItems(), getCurrentSession()]);
-  const favorites = session ? await getFavoriteItems(session.user.id) : [];
+  return (
+    <main className="page-shell">
+      <Suspense fallback={<p className="notice">Завантажуємо каталог…</p>}>
+        <ItemsContent />
+      </Suspense>
+    </main>
+  );
+}
 
-  return <main className="page-shell"><CatalogPage initialItems={items} initialFavorites={favorites} userId={session?.user.id ?? null} /></main>;
+async function ItemsContent() {
+  const queryClient = getQueryClient();
+  const [, session] = await Promise.all([
+    queryClient.prefetchQuery({ queryKey: itemKeys.all, queryFn: getItems }),
+    getCurrentSession(),
+  ]);
+
+  if (session) {
+    await queryClient.prefetchQuery({
+      queryKey: favoriteKeys.ids(session.user.id),
+      queryFn: () => getFavoriteItemIds(session.user.id),
+    });
+  }
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <CatalogPage userId={session?.user.id ?? null} />
+    </HydrationBoundary>
+  );
 }
