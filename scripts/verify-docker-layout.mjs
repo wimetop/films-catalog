@@ -81,11 +81,10 @@ const allowedWebCopies = new Set([
   "COPY --from=build --chown=node:node /app/.next/standalone ./",
   "COPY --from=build --chown=node:node /app/.next/static ./.next/static",
   "COPY --from=build --chown=node:node /app/public ./public",
-  "COPY --from=build --chown=node:node /app/package.json ./package.json",
 ]);
 for (const copyInstruction of web.match(/^COPY\s+.+$/gim) ?? []) {
   if (!allowedWebCopies.has(copyInstruction.trim())) {
-    fail("web may copy only standalone, static, and public assets (plus optional package metadata).");
+    fail("web may copy only standalone, static, and public assets.");
   }
 }
 
@@ -116,8 +115,13 @@ for (const [pattern, description] of [
   [".git", ".git"],
   ["node_modules", "node_modules"],
   [".next", ".next"],
+  ["dist", "dist"],
+  ["build", "build"],
+  ["out", "out"],
   ["coverage", "coverage"],
   ["reports", "reports"],
+  ["test-results", "test-results"],
+  ["playwright-report", "playwright-report"],
   ["**/*.test.*", "test files"],
   ["**/__tests__/", "test directories"],
 ]) {

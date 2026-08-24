@@ -68,12 +68,24 @@ test("rejects additional web COPY sources", expectMutationFailure({
   ),
 }, /web may copy only standalone, static, and public assets/));
 
+test("rejects package metadata copied outside standalone", expectMutationFailure({
+  mutateDockerfile: (dockerfile) => dockerfile.replace(
+    "COPY --from=build --chown=node:node /app/public ./public",
+    "COPY --from=build --chown=node:node /app/public ./public\nCOPY --from=build --chown=node:node /app/package.json ./package.json",
+  ),
+}, /web may copy only standalone, static, and public assets/));
+
 for (const [pattern, expectedError] of [
   [".git", /\.dockerignore must exclude \.git/],
   ["node_modules", /\.dockerignore must exclude node_modules/],
   [".next", /\.dockerignore must exclude \.next/],
   ["coverage", /\.dockerignore must exclude coverage/],
   ["reports", /\.dockerignore must exclude reports/],
+  ["dist", /\.dockerignore must exclude dist/],
+  ["build", /\.dockerignore must exclude build/],
+  ["out", /\.dockerignore must exclude out/],
+  ["test-results", /\.dockerignore must exclude test-results/],
+  ["playwright-report", /\.dockerignore must exclude playwright-report/],
   ["**/*.test.*", /\.dockerignore must exclude test files/],
 ]) {
   test(`requires .dockerignore to exclude ${pattern}`, expectMutationFailure({
