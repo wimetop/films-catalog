@@ -1,11 +1,135 @@
 services:
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy volatile-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app-network
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - app-network
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_LIST: ${CACHE_TTL_LIST:-60}
+      CACHE_TTL_ITEM: ${CACHE_TTL_ITEM:-300}
+      TRENDING_TOP_N: ${TRENDING_TOP_N:-10}
+      TRENDING_ITEMS_TTL_SECONDS: ${TRENDING_ITEMS_TTL_SECONDS:-900}
+      TRENDING_REBUILD_CRON: ${TRENDING_REBUILD_CRON:-*/5 * * * *}
+      TRUST_PROXY_FOR_RATE_LIMIT: ${TRUST_PROXY_FOR_RATE_LIMIT:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - app-network
+
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL_LIST: ${CACHE_TTL_LIST:-60}
+      CACHE_TTL_ITEM: ${CACHE_TTL_ITEM:-300}
+      TRENDING_TOP_N: ${TRENDING_TOP_N:-10}
+      TRENDING_ITEMS_TTL_SECONDS: ${TRENDING_ITEMS_TTL_SECONDS:-900}
+      TRENDING_REBUILD_CRON: ${TRENDING_REBUILD_CRON:-*/5 * * * *}
+      TRUST_PROXY_FOR_RATE_LIMIT: ${TRUST_PROXY_FOR_RATE_LIMIT:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const Redis=require('ioredis');const redis=new Redis(process.env.REDIS_URL,{connectTimeout:3000,maxRetriesPerRequest:1});redis.ping().then(()=>redis.quit()).then(()=>process.exit(0)).catch(()=>{redis.disconnect();process.exit(1)})\""]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:16-alpine
+    profiles:
+      - local-db
+    environment:
+      POSTGRES_DB: filmscatalog
+      POSTGRES_USER: filmscatalog
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-local-postgres-roles.sql:/docker-entrypoint-initdb.d/10-create-api-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U filmscatalog -d filmscatalog"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app-network
+
+  seed:
+    build:
+      context: .
+      target: seed
+    command: ["./node_modules/.bin/tsx", "scripts/seed.ts"]
+    profiles:
+      - demo
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - app-network
 
 volumes:
   redis-data:
+  postgres-data:
+
+networks:
+  app-network: {}
