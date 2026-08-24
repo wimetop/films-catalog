@@ -70,3 +70,18 @@ Final-review verification:
   `npm run verify:worker-build` — passed.
 - Docker CLI and nested-worktree esbuild limitations above remain unchanged;
   Docker smoke and a fresh worker bundle are not claimed as verified.
+
+## Final P2 follow-up
+
+- `docker:dev-redis:up` and `docker:dev-redis:down` now both specify the
+  `filmscatalog-dev-redis` Compose project, isolating host-development Redis
+  containers and volumes from the production Compose project.
+- `verify-docker-env` now validates the same `POSTGRES_PASSWORD` source Docker
+  Compose uses: a defined shell value takes precedence over `.env`; otherwise
+  the `.env` value is validated. Regression tests prove an unsafe shell
+  override is rejected even with a safe file, and that a safe shell value wins
+  over an unsafe file.
+
+Verification: focused Compose and Docker-environment regression tests passed
+(13 tests), followed by `npx tsc --noEmit`, `npm run lint`, and `git diff
+--check` with successful exit status.

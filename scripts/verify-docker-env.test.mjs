@@ -7,7 +7,7 @@ import { expect, test } from "vitest";
 
 const verifierPath = new URL("./verify-docker-env.mjs", import.meta.url);
 
-async function verifyEnvironment(contents) {
+async function verifyEnvironment(contents, postgresPassword) {
   const directory = await mkdtemp(join(tmpdir(), "filmscatalog-docker-env-"));
   const envPath = join(directory, ".env");
 
@@ -15,7 +15,11 @@ async function verifyEnvironment(contents) {
     await writeFile(envPath, contents);
     return spawnSync(process.execPath, [fileURLToPath(verifierPath)], {
       encoding: "utf8",
-      env: { ...process.env, DOCKER_ENV_PATH: envPath },
+      env: {
+        ...process.env,
+        DOCKER_ENV_PATH: envPath,
+        ...(postgresPassword === undefined ? {} : { POSTGRES_PASSWORD: postgresPassword }),
+      },
     });
   } finally {
     await rm(directory, { force: true, recursive: true });
@@ -33,4 +37,17 @@ test("rejects a Postgres password that is unsafe inside the local database URL",
 
   expect(result.status).toBe(1);
   expect(result.stderr).toMatch(/unreserved URL-safe characters/);
+});
+
+test("rejects an unsafe shell password even when .env contains a safe value", async () => {
+  const result = await verifyEnvironment("POSTGRES_PASSWORD=safe-file-password\n", "shell:override");
+
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/unreserved URL-safe characters/);
+});
+
+test("uses a safe shell password instead of an unsafe .env value", async () => {
+  const result = await verifyEnvironment("POSTGRES_PASSWORD=unsafe:file-password\n", "safe-shell-password");
+
+  expect(result.status).toBe(0);
 });

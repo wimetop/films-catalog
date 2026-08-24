@@ -10,6 +10,7 @@ const localDbComposePath = new URL("../docker-compose.local-db.yml", import.meta
 const devRedisComposePath = new URL("../docker-compose.dev-redis.yml", import.meta.url);
 const localPostgresRolesPath = new URL("./init-local-postgres-roles.sql", import.meta.url);
 const verifierPath = new URL("./verify-compose.mjs", import.meta.url);
+const packagePath = new URL("../package.json", import.meta.url);
 
 async function readOptional(path) {
   try {
@@ -70,6 +71,13 @@ test("provides a host-development Redis stack without application environment re
   expect(devRedisCompose).toMatch(/^\s+- "6379:6379"$/m);
   expect(devRedisCompose).not.toContain("${");
   expect(devRedisCompose).not.toMatch(/^  (?:web|worker|migrate|postgres|seed):/m);
+});
+
+test("isolates host-development Redis in its own Compose project", async () => {
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+
+  expect(packageJson.scripts["docker:dev-redis:up"]).toContain("docker compose -p filmscatalog-dev-redis -f docker-compose.dev-redis.yml up -d");
+  expect(packageJson.scripts["docker:dev-redis:down"]).toContain("docker compose -p filmscatalog-dev-redis -f docker-compose.dev-redis.yml down");
 });
 
 test("provisions no-login roles required by local migrations", async () => {

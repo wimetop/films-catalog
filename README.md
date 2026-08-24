@@ -75,7 +75,8 @@
 
    Ця окрема development Compose-конфігурація публікує Redis на host-порті
    `6379` і не читає `.env`, тому не потребує database або auth secrets. Вона
-   не є production Compose stack і не відкриває production Redis назовні.
+   запускається в окремому Compose project `filmscatalog-dev-redis`, не є
+   production Compose stack і не відкриває production Redis назовні.
    Зупинити її можна командою `npm run docker:dev-redis:down`. Якщо
    використовується Upstash через `REDIS_URL`, термінал 2 не потрібен. `npm run
    worker` explicitly завантажує `.env.local` до старту standalone

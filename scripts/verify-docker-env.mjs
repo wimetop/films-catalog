@@ -22,14 +22,18 @@ function readEnvironmentValue(source, name) {
   return value;
 }
 
-let environmentSource;
-try {
-  environmentSource = await readFile(environmentPath, "utf8");
-} catch {
-  fail(".env is required; copy .env.example and replace its placeholders.");
+let postgresPassword = process.env.POSTGRES_PASSWORD;
+if (postgresPassword === undefined) {
+  let environmentSource;
+  try {
+    environmentSource = await readFile(environmentPath, "utf8");
+  } catch {
+    fail(".env is required when POSTGRES_PASSWORD is not set in the shell; copy .env.example and replace its placeholders.");
+  }
+
+  postgresPassword = readEnvironmentValue(environmentSource, "POSTGRES_PASSWORD");
 }
 
-const postgresPassword = readEnvironmentValue(environmentSource, "POSTGRES_PASSWORD");
 if (!unreservedUrlCharacters.test(postgresPassword)) {
   fail("POSTGRES_PASSWORD must use only unreserved URL-safe characters: A-Z, a-z, 0-9, '.', '_', '~', or '-'.");
 }

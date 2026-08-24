@@ -25,8 +25,8 @@
     "docker:up": "npm run verify:docker-env && docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs --follow",
-    "docker:dev-redis:up": "docker compose -f docker-compose.dev-redis.yml up -d",
-    "docker:dev-redis:down": "docker compose -f docker-compose.dev-redis.yml down",
+    "docker:dev-redis:up": "docker compose -p filmscatalog-dev-redis -f docker-compose.dev-redis.yml up -d",
+    "docker:dev-redis:down": "docker compose -p filmscatalog-dev-redis -f docker-compose.dev-redis.yml down",
     "docker:local:up": "npm run verify:docker-env && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db up --build -d",
     "docker:local:demo": "npm run verify:docker-env && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db --profile demo up --build -d",
     "docker:local:down": "docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db down"
