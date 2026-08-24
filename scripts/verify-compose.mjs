@@ -64,7 +64,7 @@ for (const service of ["web", "worker"]) {
 
 requireMatch(compose, /migrate:[\s\S]*?depends_on:[\s\S]*?redis:\s*\n\s+condition:\s+service_healthy/, "migrate must wait for Redis health.");
 requireMatch(compose, /migrate:[\s\S]*?postgres:\s*\n\s+condition:\s+service_healthy[\s\S]*?required:\s+false/, "migrate must wait for local Postgres health when it is enabled.");
-requireMatch(compose, /migrate:[\s\S]*?DIRECT_URL:\s+\$\{DIRECT_URL:-postgresql:\/\/filmscatalog:local-development-password@postgres:5432\/filmscatalog\}/, "migrate must receive a direct database URL.");
+requireMatch(compose, /migrate:[\s\S]*?DIRECT_URL:\s+\$\{DIRECT_URL:\?DIRECT_URL must be set in \.env\}/, "migrate must require an externally configured direct database URL.");
 requireMatch(compose, /web:[\s\S]*?healthcheck:[\s\S]*?\/api\/health/, "web must healthcheck /api/health.");
 requireMatch(compose, /worker:[\s\S]*?healthcheck:[\s\S]*?redis\.ping\(\)/, "worker must have a Redis liveness healthcheck.");
 requireMatch(compose, /postgres:[\s\S]*?profiles:\s*\n\s+-\s+local-db/, "postgres must be opt-in through the local-db profile.");
@@ -73,7 +73,7 @@ requireMatch(compose, /seed:[\s\S]*?depends_on:[\s\S]*?migrate:\s*\n\s+condition
 requireMatch(compose, /web:[\s\S]*?build:[\s\S]*?args:[\s\S]*?NEXT_PUBLIC_APP_URL:/, "web must pass NEXT_PUBLIC_APP_URL as a build argument.");
 requireMatch(compose, /seed:[\s\S]*?target:\s+seed/, "seed must use the dedicated seed image target.");
 
-const localPostgresUrl = "postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog";
+const localPostgresUrl = "postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog";
 for (const [service, variables] of [
   ["migrate", ["DIRECT_URL"]],
   ["web", ["DATABASE_URL", "DIRECT_URL"]],
@@ -83,7 +83,7 @@ for (const [service, variables] of [
   for (const variable of variables) {
     requireMatch(
       serviceContents(localDbCompose, service),
-      new RegExp(`^      ${variable}:\\s+${localPostgresUrl.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")}$`, "m"),
+      new RegExp(`^      ${variable}:\\s+${RegExp.escape(localPostgresUrl)}$`, "m"),
       `the local-db override must force ${service}.${variable} to the private Postgres URL.`,
     );
   }

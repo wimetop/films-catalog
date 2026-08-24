@@ -17,7 +17,7 @@ services:
       context: .
       target: migrate
     environment:
-      DIRECT_URL: ${DIRECT_URL:-postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog}
+      DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
     depends_on:
       redis:
         condition: service_healthy
@@ -34,8 +34,8 @@ services:
       args:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog}
-      DIRECT_URL: ${DIRECT_URL:-postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
@@ -67,8 +67,8 @@ services:
       context: .
       target: worker
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog}
-      DIRECT_URL: ${DIRECT_URL:-postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
@@ -100,7 +100,7 @@ services:
     environment:
       POSTGRES_DB: filmscatalog
       POSTGRES_USER: filmscatalog
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -119,7 +119,7 @@ services:
     profiles:
       - demo
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
     depends_on:
       migrate:
         condition: service_completed_successfully

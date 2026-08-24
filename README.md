@@ -104,6 +104,87 @@ npm run worker    # термінал 3
 
 Відкрий [http://localhost:3000/items](http://localhost:3000/items).
 
+## Docker Compose
+
+Compose читає файл `.env`, а не `.env.local`. Перед першим запуском скопіюйте
+шаблон і замініть **усі** placeholder-значення; не комітьте `.env`.
+
+```powershell
+Copy-Item .env.example .env
+```
+
+### Зовнішня PostgreSQL (звичайний deployment)
+
+Це стандартний режим. У `.env` вкажіть реальні зовнішні PostgreSQL URL:
+
+- `DATABASE_URL` — runtime URL (за потреби transaction pooler);
+- `DIRECT_URL` — прямий або session-pooler URL для Drizzle migrations;
+- `POSTGRES_PASSWORD` — заповніть значенням-заглушкою або секретом: Compose
+  вимагає його під час інтерполяції, але сервіс `postgres` у цьому режимі не
+  запускається;
+- `BETTER_AUTH_SECRET` — випадковий секрет щонайменше з 32 символів;
+- `NEXT_PUBLIC_APP_URL` — публічна адреса застосунку; це єдина змінна, що
+  передається в Docker build.
+
+Зовнішній користувач БД повинен мати права застосувати вже закомічені
+migrations. Після налаштування `.env` виконайте точні lifecycle-команди:
+
+```bash
+npm run docker:build
+npm run docker:up
+```
+
+`migrate` застосовує Drizzle migrations через `DIRECT_URL` і має завершитися
+успішно до старту `web` та `worker`. Повторний `up` без нових migrations є
+безпечним. `web` — єдиний сервіс, який публікує `http://localhost:3000`; Redis,
+worker, migrate та зовнішній database connection не мають host-портів.
+
+### Повністю локальна PostgreSQL і demo-каталог
+
+Для локальної БД не видаляйте зовнішні URL з `.env`: overlay детерміновано
+перевизначає URL усіх database consumers на приватний `postgres:5432`. Він
+використовує той самий `POSTGRES_PASSWORD`, що й контейнер Postgres, тож
+встановіть URL-safe пароль у `.env` (закодуйте спеціальні символи для URL).
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db up --build -d
+```
+
+Щоб після migrations один раз додати demo-каталог, додайте профіль `demo`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db --profile demo up --build -d
+```
+
+`seed` очікує успішний `migrate`, додає тестові фільми та завершується; він не є
+довготривалим сервісом. Для наступних запусків без повторного seed використовуйте
+лише профіль `local-db`.
+
+### Health, logs і завершення
+
+`GET /api/health` перевіряє готовність БД. Якщо БД доступна і Redis доступний,
+відповідь — `200` зі статусом `ok`. Якщо Redis тимчасово недоступний, відповідь
+залишається `200` зі статусом `degraded`: каталог продовжує працювати через БД.
+Лише недоступна БД повертає `503` (`down`). Docker healthcheck web сервісу
+використовує саме цей endpoint.
+
+```bash
+npm run docker:logs
+npm run docker:down
+```
+
+`docker:logs` підписується на логи всіх сервісів; `docker:down` коректно зупиняє
+стандартний external-DB stack. Web має 30-секундний, а worker — 60-секундний
+grace period для завершення роботи. Для local-db передайте той самий overlay під
+час shutdown:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db down
+```
+
+Ця команда зберігає named volumes Redis і Postgres. Додавайте `-v` лише якщо
+свідомо хочете незворотно видалити локальні Redis/Postgres дані.
+
 ### Типові помилки запуску
 
 | Повідомлення | Причина та дія |
@@ -130,6 +211,10 @@ npm run worker    # термінал 3
 | `npm run db:seed` | додати 10 тестових фільмів |
 | `npm run test:e2e:local` | перевірити register/login/favorites через локальний dev server |
 | `npm run worker` | окремий BullMQ-процес: `catalog` worker для scheduler/outbox/cache і `favorites` worker для пакетного recount |
+| `npm run docker:build` | зібрати Docker Compose images для стандартного external-DB stack |
+| `npm run docker:up` | запустити стандартний external-DB stack у фоні |
+| `npm run docker:logs` | підписатися на логи Docker Compose сервісів |
+| `npm run docker:down` | коректно зупинити стандартний external-DB stack, зберігши named volumes |
 
 ### Production migrations
 

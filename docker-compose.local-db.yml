@@ -1,18 +1,18 @@
 services:
   migrate:
     environment:
-      DIRECT_URL: postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog
+      DIRECT_URL: postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog
 
   web:
     environment:
-      DATABASE_URL: postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog
-      DIRECT_URL: postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog
+      DATABASE_URL: postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog
+      DIRECT_URL: postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog
 
   worker:
     environment:
-      DATABASE_URL: postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog
-      DIRECT_URL: postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog
+      DATABASE_URL: postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog
+      DIRECT_URL: postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog
 
   seed:
     environment:
-      DATABASE_URL: postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog
+      DATABASE_URL: postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog

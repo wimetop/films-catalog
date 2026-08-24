@@ -48,9 +48,16 @@ test("keeps private services unpublished while allowing external database egress
   expect(compose.match(/^\s+-\s+"?\d+:\d+"?\s*$/gm)).toEqual(["      - \"3000:3000\""]);
 });
 
+test("accepts the checked-in Compose configuration", async () => {
+  const result = await runMutation({});
+
+  expect(result.status).toBe(0);
+  expect(result.stdout).toMatch(/Compose verification passed/);
+});
+
 test("local-db override forces every database consumer to the private Postgres service", async () => {
   const localDbCompose = await readOptional(localDbComposePath);
-  const postgresUrl = "postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog";
+  const postgresUrl = "postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog";
 
   for (const service of ["migrate", "web", "worker", "seed"]) {
     expect(localDbCompose).toMatch(new RegExp(`^  ${service}:\\s*[\\s\\S]*?postgres:5432\\/filmscatalog`, "m"));
@@ -69,7 +76,7 @@ test("rejects an internal-only application network", async () => {
 
 test("rejects local-db URLs that can inherit external environment values", async () => {
   const result = await runMutation({
-    mutateLocalDbCompose: (compose) => compose.replace("postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog", "${DATABASE_URL}"),
+    mutateLocalDbCompose: (compose) => compose.replace("postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog", "${DATABASE_URL}"),
   });
 
   expect(result.status).toBe(1);
