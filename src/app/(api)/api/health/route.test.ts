@@ -48,6 +48,25 @@ describe("GET /api/health", () => {
     });
   });
 
+  it("returns degraded promptly when Redis ping never settles", async () => {
+    mocks.dbExecute.mockResolvedValue([]);
+    mocks.redisPing.mockReturnValue(new Promise(() => undefined));
+
+    const response = await Promise.race([
+      GET(),
+      new Promise<Response>((_, reject) => {
+        setTimeout(() => reject(new Error("health did not degrade within 750ms")), 750);
+      }),
+    ]);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      status: "degraded",
+      database: "ok",
+      redis: "down",
+    });
+  });
+
   it("returns 503 when database is down", async () => {
     mocks.dbExecute.mockRejectedValue(new Error("down"));
     mocks.redisPing.mockResolvedValue("PONG");

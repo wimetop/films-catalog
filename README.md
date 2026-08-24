@@ -64,7 +64,7 @@
    **Термінал 2 — Redis** (лише якщо не використовуєш віддалений Upstash):
 
    ```bash
-   docker compose up -d redis
+   npm run docker:dev-redis:up
    ```
 
    **Термінал 3 — BullMQ worker:**
@@ -73,7 +73,14 @@
    npm run worker
    ```
 
-   Якщо використовується Upstash через `REDIS_URL`, термінал 2 не потрібен. `npm run worker` explicitly завантажує `.env.local` до старту standalone Node-процесу. У production ті самі змінні передаються середовищем платформи, а не файлом.
+   Ця окрема development Compose-конфігурація публікує Redis на host-порті
+   `6379` і не читає `.env`, тому не потребує database або auth secrets. Вона
+   не є production Compose stack і не відкриває production Redis назовні.
+   Зупинити її можна командою `npm run docker:dev-redis:down`. Якщо
+   використовується Upstash через `REDIS_URL`, термінал 2 не потрібен. `npm run
+   worker` explicitly завантажує `.env.local` до старту standalone
+   Node-процесу. У production ті самі змінні передаються середовищем платформи,
+   а не файлом.
 
 ### Redis: локально або Upstash
 
@@ -84,6 +91,10 @@
 ```env
 REDIS_URL="redis://localhost:6379"
 ```
+
+`redis://localhost:6379` застосовується лише до host development у
+`.env.local`. У Docker Compose `.env` за замовчуванням містить
+`redis://redis:6379`, тобто приватне ім'я сервісу всередині Compose network.
 
 Upstash Redis через TLS:
 
@@ -121,7 +132,8 @@ Copy-Item .env.example .env
 - `DIRECT_URL` — прямий або session-pooler URL для Drizzle migrations;
 - `POSTGRES_PASSWORD` — заповніть значенням-заглушкою або секретом: Compose
   вимагає його під час інтерполяції, але сервіс `postgres` у цьому режимі не
-  запускається;
+  запускається. Значення має містити лише URL-safe символи `A-Z`, `a-z`,
+  `0-9`, `.`, `_`, `~` або `-`;
 - `BETTER_AUTH_SECRET` — випадковий секрет щонайменше з 32 символів;
 - `NEXT_PUBLIC_APP_URL` — публічна адреса застосунку; це єдина змінна, що
   передається в Docker build.
@@ -139,26 +151,34 @@ npm run docker:up
 безпечним. `web` — єдиний сервіс, який публікує `http://localhost:3000`; Redis,
 worker, migrate та зовнішній database connection не мають host-портів.
 
+`npm run docker:build` і `npm run docker:up` спочатку запускають
+`npm run verify:docker-env`, який перевіряє URL-safe `POSTGRES_PASSWORD` без
+виведення його значення.
+
 ### Повністю локальна PostgreSQL і demo-каталог
 
 Для локальної БД не видаляйте зовнішні URL з `.env`: overlay детерміновано
 перевизначає URL усіх database consumers на приватний `postgres:5432`. Він
-використовує той самий `POSTGRES_PASSWORD`, що й контейнер Postgres, тож
-встановіть URL-safe пароль у `.env` (закодуйте спеціальні символи для URL).
+використовує той самий `POSTGRES_PASSWORD`, що й контейнер Postgres. Встановіть
+не закодований пароль лише з `A-Z`, `a-z`, `0-9`, `.`, `_`, `~` і `-`; validator
+відхилить інші символи, щоб URL consumers не отримали інший пароль.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db up --build -d
+npm run docker:local:up
 ```
 
 Щоб після migrations один раз додати demo-каталог, додайте профіль `demo`:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db --profile demo up --build -d
+npm run docker:local:demo
 ```
 
 `seed` очікує успішний `migrate`, додає тестові фільми та завершується; він не є
 довготривалим сервісом. Для наступних запусків без повторного seed використовуйте
-лише профіль `local-db`.
+лише профіль `local-db`. На першій ініціалізації порожнього local Postgres
+контейнер виконує idempotent SQL, який створює NOLOGIN ролі `anon` і
+`authenticated` до migrations; це необхідно для закомічених `REVOKE` statements
+і не впливає на external database deployment.
 
 ### Health, logs і завершення
 
@@ -179,7 +199,7 @@ grace period для завершення роботи. Для local-db пере�
 час shutdown:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db down
+npm run docker:local:down
 ```
 
 Ця команда зберігає named volumes Redis і Postgres. Додавайте `-v` лише якщо
@@ -211,6 +231,12 @@ docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile lo
 | `npm run db:seed` | додати 10 тестових фільмів |
 | `npm run test:e2e:local` | перевірити register/login/favorites через локальний dev server |
 | `npm run worker` | окремий BullMQ-процес: `catalog` worker для scheduler/outbox/cache і `favorites` worker для пакетного recount |
+| `npm run docker:dev-redis:up` | запустити лише host-development Redis на `localhost:6379`, без `.env` або application secrets |
+| `npm run docker:dev-redis:down` | зупинити host-development Redis |
+| `npm run verify:docker-env` | перевірити URL-safe `POSTGRES_PASSWORD` у Docker `.env` |
+| `npm run docker:local:up` | перевірити Docker `.env` і запустити local-db overlay |
+| `npm run docker:local:demo` | перевірити Docker `.env`, запустити local-db overlay та одноразовий demo seed |
+| `npm run docker:local:down` | коректно зупинити local-db overlay |
 | `npm run docker:build` | зібрати Docker Compose images для стандартного external-DB stack |
 | `npm run docker:up` | запустити стандартний external-DB stack у фоні |
 | `npm run docker:logs` | підписатися на логи Docker Compose сервісів |

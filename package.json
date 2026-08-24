@@ -20,10 +20,16 @@
     "build:worker": "node scripts/build-worker.mjs",
     "verify:worker-build": "node scripts/verify-worker-build.mjs",
     "verify:compose": "node scripts/verify-compose.mjs",
-    "docker:build": "docker compose build",
-    "docker:up": "docker compose up -d",
+    "verify:docker-env": "node scripts/verify-docker-env.mjs",
+    "docker:build": "npm run verify:docker-env && docker compose build",
+    "docker:up": "npm run verify:docker-env && docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs --follow"
+    "docker:logs": "docker compose logs --follow",
+    "docker:dev-redis:up": "docker compose -f docker-compose.dev-redis.yml up -d",
+    "docker:dev-redis:down": "docker compose -f docker-compose.dev-redis.yml down",
+    "docker:local:up": "npm run verify:docker-env && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db up --build -d",
+    "docker:local:demo": "npm run verify:docker-env && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db --profile demo up --build -d",
+    "docker:local:down": "docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db down"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.1",

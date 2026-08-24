@@ -8,6 +8,8 @@ function configuredPath(variable, fallback) {
 
 const composePath = configuredPath("COMPOSE_PATH", new URL("../docker-compose.yml", import.meta.url));
 const localDbComposePath = configuredPath("LOCAL_DB_COMPOSE_PATH", new URL("../docker-compose.local-db.yml", import.meta.url));
+const devRedisComposePath = configuredPath("DEV_REDIS_COMPOSE_PATH", new URL("../docker-compose.dev-redis.yml", import.meta.url));
+const localPostgresRolesPath = configuredPath("LOCAL_POSTGRES_ROLES_PATH", new URL("./init-local-postgres-roles.sql", import.meta.url));
 
 function fail(message) {
   console.error(`Compose verification failed: ${message}`);
@@ -37,9 +39,11 @@ async function readRequiredFile(path, label) {
   }
 }
 
-const [compose, localDbCompose] = await Promise.all([
+const [compose, localDbCompose, devRedisCompose, localPostgresRoles] = await Promise.all([
   readRequiredFile(composePath, "docker-compose.yml"),
   readRequiredFile(localDbComposePath, "docker-compose.local-db.yml"),
+  readRequiredFile(devRedisComposePath, "docker-compose.dev-redis.yml"),
+  readRequiredFile(localPostgresRolesPath, "init-local-postgres-roles.sql"),
 ]);
 
 for (const service of ["redis", "migrate", "web", "worker", "postgres", "seed"]) {
@@ -68,10 +72,19 @@ requireMatch(compose, /migrate:[\s\S]*?DIRECT_URL:\s+\$\{DIRECT_URL:\?DIRECT_URL
 requireMatch(compose, /web:[\s\S]*?healthcheck:[\s\S]*?\/api\/health/, "web must healthcheck /api/health.");
 requireMatch(compose, /worker:[\s\S]*?healthcheck:[\s\S]*?redis\.ping\(\)/, "worker must have a Redis liveness healthcheck.");
 requireMatch(compose, /postgres:[\s\S]*?profiles:\s*\n\s+-\s+local-db/, "postgres must be opt-in through the local-db profile.");
+requireMatch(compose, /postgres:[\s\S]*?volumes:[\s\S]*?\.\/scripts\/init-local-postgres-roles\.sql:\/docker-entrypoint-initdb\.d\/10-create-api-roles\.sql:ro/, "local Postgres must initialize anon and authenticated roles before migrations.");
 requireMatch(compose, /seed:[\s\S]*?profiles:\s*\n\s+-\s+demo/, "seed must be opt-in through the demo profile.");
 requireMatch(compose, /seed:[\s\S]*?depends_on:[\s\S]*?migrate:\s*\n\s+condition:\s+service_completed_successfully/, "seed must wait for successful migrations.");
 requireMatch(compose, /web:[\s\S]*?build:[\s\S]*?args:[\s\S]*?NEXT_PUBLIC_APP_URL:/, "web must pass NEXT_PUBLIC_APP_URL as a build argument.");
 requireMatch(compose, /seed:[\s\S]*?target:\s+seed/, "seed must use the dedicated seed image target.");
+requireMatch(localPostgresRoles, /IF NOT EXISTS[\s\S]*?CREATE ROLE anon NOLOGIN/i, "local Postgres role initialization must create the no-login anon role idempotently.");
+requireMatch(localPostgresRoles, /IF NOT EXISTS[\s\S]*?CREATE ROLE authenticated NOLOGIN/i, "local Postgres role initialization must create the no-login authenticated role idempotently.");
+
+requireMatch(devRedisCompose, /^services:\s*\n  redis:/m, "the development Redis stack must contain only a Redis service.");
+requireMatch(devRedisCompose, /^\s+- "6379:6379"$/m, "the development Redis stack must publish host port 6379.");
+if (devRedisCompose.includes("${")) {
+  fail("the development Redis stack must not require application environment values.");
+}
 
 const localPostgresUrl = "postgresql://filmscatalog:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/filmscatalog";
 for (const [service, variables] of [

@@ -39,3 +39,34 @@
   the otherwise present `src/worker/index.ts`, including when invoked with an
   absolute entry point. This is a sandbox/worktree filesystem limitation; no
   worker-source change was made in Task 5.
+
+## Final review fixes
+
+- Added a standalone `docker-compose.dev-redis.yml` and
+  `docker:dev-redis:up`/`docker:dev-redis:down` scripts. Host development can
+  now run Redis on `localhost:6379` without parsing the production stack or
+  supplying unrelated application environment values; production Redis remains
+  private.
+- Bounded the health route's Redis ping with the existing 500 ms Redis timeout.
+  A regression test holds the ping forever and proves the route returns its
+  degraded `200` response within 750 ms, well below Compose's 5 s healthcheck
+  timeout.
+- Added `verify:docker-env`, invoked by all Docker start/build scripts that use
+  the local database. It accepts `POSTGRES_PASSWORD` only when it contains RFC
+  3986 unreserved characters (`A-Z`, `a-z`, `0-9`, `.`, `_`, `~`, `-`), so the
+  value supplied to Postgres exactly matches the local database URL.
+- Added the local Postgres entrypoint SQL hook. On initialization it
+  idempotently creates the `anon` and `authenticated` NOLOGIN roles before
+  migrations, allowing checked-in migrations to revoke their privileges.
+
+Final-review verification:
+
+- Focused health, Compose, and Docker-environment tests — 16 tests passed.
+- Full `npm test` — 29 files, 95 tests passed.
+- `npm run lint` and `npx tsc --noEmit` — passed.
+- Next production build with the existing local runtime environment loaded
+  without printing secrets — passed.
+- `npm run verify:compose`, `node scripts/verify-docker-layout.mjs`, and
+  `npm run verify:worker-build` — passed.
+- Docker CLI and nested-worktree esbuild limitations above remain unchanged;
+  Docker smoke and a fresh worker bundle are not claimed as verified.

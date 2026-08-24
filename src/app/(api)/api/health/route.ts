@@ -1,4 +1,5 @@
 import { dbClient } from "@/db";
+import { withRedisTimeout } from "@/server/cache/cache-aside";
 import { redis } from "@/server/cache/client";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export async function GET(): Promise<Response> {
   };
   const [databaseResult, redisResult] = await Promise.allSettled([
     databaseClient.execute?.("select 1") ?? dbClient.unsafe("select 1"),
-    redis.ping(),
+    withRedisTimeout(redis.ping()),
   ]);
 
   const database = databaseResult.status === "fulfilled" ? "ok" : "down";
