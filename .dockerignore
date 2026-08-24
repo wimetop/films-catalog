@@ -1,0 +1,30 @@
+# Runtime secrets and local environment configuration.
+.env*
+
+# Source-control and local dependencies.
+.git
+.gitignore
+node_modules
+
+# Build output and generated reports.
+.next
+dist
+build
+out
+coverage
+test-results
+playwright-report
+reports
+*.log
+
+# Tests and development-only artifacts.
+**/*.test.*
+**/__tests__/
+.superpowers
+.worktrees
+docs
+*.md
+AGENTS.md
+CLAUDE.md
+DESIGN.md
+UX-CONTRACT.md
