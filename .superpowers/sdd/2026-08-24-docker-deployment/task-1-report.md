@@ -36,3 +36,9 @@ Implemented the public `GET /api/health` route and its contract tests.
 The response exposes only normalized health states, never caught exception messages or connection details. Redis-only failure remains HTTP 200 for the Docker healthcheck contract, while database failure is the only 503 condition. No unrelated files were changed.
 
 Note: the handoff brief was present in the parent worktree but not copied into this worktree at the requested path; it was read from the parent `.superpowers/sdd/...` location.
+
+## Round 1 review follow-up
+
+- Added a combined-failure test asserting HTTP 503 and the exact normalized payload `{ status: "down", database: "down", redis: "down" }`, with raw error messages excluded.
+- Added a deferred-promise concurrency test asserting both `dbClient.execute("select 1")` and `redis.ping()` are invoked before either dependency settles.
+- Focused verification: `npm test -- "src/app/(api)/api/health/route.test.ts"` passed, 1 file and 5 tests.

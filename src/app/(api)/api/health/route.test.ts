@@ -60,4 +60,40 @@ describe("GET /api/health", () => {
       database: "down",
     });
   });
+
+  it("returns normalized 503 when both database and Redis are down", async () => {
+    mocks.dbExecute.mockRejectedValue(new Error("database secret"));
+    mocks.redisPing.mockRejectedValue(new Error("Redis secret"));
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      status: "down",
+      database: "down",
+      redis: "down",
+    });
+  });
+
+  it("starts both dependency checks before either settles", async () => {
+    let resolveDatabase!: (value: unknown) => void;
+    let resolveRedis!: (value: string) => void;
+    const databaseCheck = new Promise((resolve) => {
+      resolveDatabase = resolve;
+    });
+    const redisCheck = new Promise<string>((resolve) => {
+      resolveRedis = resolve;
+    });
+    mocks.dbExecute.mockReturnValue(databaseCheck);
+    mocks.redisPing.mockReturnValue(redisCheck);
+
+    const responsePromise = GET();
+
+    expect(mocks.dbExecute).toHaveBeenCalledWith("select 1");
+    expect(mocks.redisPing).toHaveBeenCalledOnce();
+
+    resolveDatabase([]);
+    resolveRedis("PONG");
+    await expect(responsePromise).resolves.toHaveProperty("status", 200);
+  });
 });
