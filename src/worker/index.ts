@@ -4,7 +4,7 @@ import { envServer } from "@/config/env";
 import { redis } from "@/server/cache/client";
 import { getCatalogQueue, getFavoritesQueue } from "@/server/queue/client";
 import { queueNames } from "@/server/queue/names";
-import { registerOutboxPublisher, registerTrendingRebuild } from "@/server/queue/jobs";
+import { enqueueCacheWarm, registerOutboxPublisher, registerTrendingRebuild } from "@/server/queue/jobs";
 
 import { processCacheWarm, processFavoriteRecount, processOutboxCleanup, processOutboxPublish, processTrendingRebuild } from "./processors";
 
@@ -45,7 +45,7 @@ const favoritesWorker = new Worker(queueNames.favorites, async (job) => {
   const startedAt = Date.now();
   await processFavoriteRecount(job.data);
   console.info("Worker job completed", { id: job.id, name: job.name, durationMs: Date.now() - startedAt });
-}, { connection, concurrency: 2, limiter: { max: 10, duration: 1_000 } });
+}, { connection, concurrency: 1, limiter: { max: 10, duration: 1_000 } });
 
 for (const worker of [catalogWorker, favoritesWorker]) {
   worker.on("failed", (job, error) => {
@@ -63,6 +63,7 @@ async function bootstrap() {
   await registerTrendingRebuild();
   await registerOutboxPublisher();
   await Promise.all([catalogWorker.waitUntilReady(), favoritesWorker.waitUntilReady()]);
+  await enqueueCacheWarm();
   console.info("Worker ready", { queues: [queueNames.catalog, queueNames.favorites] });
 }
 

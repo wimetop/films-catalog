@@ -9,6 +9,7 @@ const serverEnvSchema = z.object({
   DIRECT_URL: z.string().min(1),
   REDIS_URL: z.url(),
   TRENDING_REBUILD_CRON: z.string().min(1).default("*/5 * * * *"),
+  TRENDING_ITEMS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   TRENDING_TOP_N: z.coerce.number().int().positive().default(10),
 });
 
@@ -38,4 +39,5 @@ export const envServer = {
   cacheTtlItem: parsedEnv.CACHE_TTL_ITEM,
   trendingTopN: parsedEnv.TRENDING_TOP_N,
   trendingRebuildCron: parsedEnv.TRENDING_REBUILD_CRON,
+  trendingItemsTtlSeconds: parsedEnv.TRENDING_ITEMS_TTL_SECONDS,
 } as const;

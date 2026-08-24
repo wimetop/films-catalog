@@ -4,6 +4,7 @@ import { envServer } from "@/config/env";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { readThroughCache, withRedisTimeout } from "@/server/cache/cache-aside";
+import { canUseRedis } from "@/server/cache/circuit-breaker";
 import { cacheMissDatabaseSemaphore } from "@/server/cache/database-semaphore";
 import { redis } from "@/server/cache/client";
 import { cacheKeys } from "@/server/cache/keys";
@@ -30,6 +31,8 @@ async function readItems(page?: number, pageSize?: number): Promise<Item[]> {
 }
 
 export async function getItems(page?: number, pageSize?: number): Promise<Item[]> {
+  if (!canUseRedis()) return cacheMissDatabaseSemaphore.run(() => readItems(page, pageSize));
+
   let version: string | null;
 
   try {
@@ -47,6 +50,7 @@ export async function getItems(page?: number, pageSize?: number): Promise<Item[]
     redis: redis as unknown as Parameters<typeof readThroughCache<Item[]>>[0]["redis"],
     key: cacheKeys.itemsList(cachePage, cachePageSize, version ?? "0"),
     ttlSeconds: envServer.cacheTtlList,
+    staleTtlSeconds: 30,
     onHit: () => cacheStats.record("itemsList", "hit"),
     onMiss: () => cacheStats.record("itemsList", "miss"),
     parseCached: (value) => itemListCacheSchema.parse(value).value,

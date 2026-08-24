@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getTrendingItemIds: vi.fn(),
   getItemsByIds: vi.fn(),
   readThroughCache: vi.fn(),
   zrevrange: vi.fn(),
@@ -14,6 +15,10 @@ vi.mock("@/config/env", () => ({
 
 vi.mock("@/entities/item/api/server", () => ({
   getItemsByIds: mocks.getItemsByIds,
+}));
+
+vi.mock("@/entities/favorite/api/server", () => ({
+  getTrendingItemIds: mocks.getTrendingItemIds,
 }));
 
 vi.mock("@/server/cache/client", () => ({
@@ -42,5 +47,23 @@ describe("getTrendingItems", () => {
 
     await expect(getTrendingItems()).resolves.toEqual([{ id: "item-1" }, { id: "item-2" }]);
     expect(mocks.getItemsByIds).toHaveBeenCalledWith(["item-1", "item-2"]);
+  });
+
+  it("validates the Redis cache envelope before returning trending data", async () => {
+    mocks.readThroughCache.mockImplementation(async (options: { parseCached?: (value: unknown) => unknown }) => (
+      options.parseCached?.({ value: [{ id: "not-a-uuid" }] })
+    ));
+
+    await expect(getTrendingItems()).rejects.toThrow();
+  });
+
+  it("falls back to the database projection when Redis ranking is unavailable", async () => {
+    mocks.zrevrange.mockRejectedValue(new Error("Redis unavailable"));
+    mocks.getTrendingItemIds.mockResolvedValue(["item-2", "item-1"]);
+    mocks.getItemsByIds.mockResolvedValue([{ id: "item-2" }, { id: "item-1" }]);
+    mocks.readThroughCache.mockImplementation(async (options: { load: () => Promise<unknown> }) => options.load());
+
+    await expect(getTrendingItems()).resolves.toEqual([{ id: "item-2" }, { id: "item-1" }]);
+    expect(mocks.getTrendingItemIds).toHaveBeenCalledWith(10);
   });
 });

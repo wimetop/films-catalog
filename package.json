@@ -15,6 +15,7 @@
     "db:security": "tsx scripts/apply-security.ts",
     "db:security:verify": "tsx scripts/verify-security.ts",
     "test:e2e:local": "tsx scripts/verify-auth-favorites-flow.ts",
+    "test:cache-worker:local": "node --require ./scripts/drizzle-kit-os-workaround.cjs --import tsx scripts/verify-cache-worker-flow.ts",
     "worker": "node --env-file=.env.local --import tsx src/worker/index.ts"
   },
   "dependencies": {

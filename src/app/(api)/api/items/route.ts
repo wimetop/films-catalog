@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
+  if (!await allowRequest(`items-write:${session.user.id}`, 20)) return NextResponse.json({ message: "Too many requests" }, { status: 429 });
 
   const body: unknown = await request.json().catch(() => null);
 

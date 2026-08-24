@@ -1,11 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
 import { addFavoriteRequest, fetchFavoriteIds, removeFavoriteRequest } from "@/entities/favorite/api/client";
 import { favoriteKeys } from "@/entities/favorite/model/query-keys";
 import type { Item } from "@/entities/item/model/types";
 import { trendingKeys } from "@/entities/trending/model/query-keys";
+import { scheduleTrendingRefresh } from "@/entities/trending/model/schedule-refresh";
 
 type FavoriteButtonProps = { item: Item; userId: string };
 
@@ -13,6 +15,8 @@ export function FavoriteButton({ item, userId }: FavoriteButtonProps) {
   const queryClient = useQueryClient();
   const idsQueryKey = favoriteKeys.ids(userId);
   const listQueryKey = favoriteKeys.list(userId);
+  const cancelTrendingRefreshRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelTrendingRefreshRef.current?.(), []);
   const { data: favoriteIds = [] } = useQuery({
     queryKey: idsQueryKey,
     queryFn: fetchFavoriteIds,
@@ -40,11 +44,17 @@ export function FavoriteButton({ item, userId }: FavoriteButtonProps) {
       queryClient.setQueryData(idsQueryKey, context?.previousIds);
       queryClient.setQueryData(listQueryKey, context?.previousList);
     },
-    onSettled: () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: idsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: listQueryKey }),
-      queryClient.invalidateQueries({ queryKey: trendingKeys.all }),
-    ]),
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: idsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: listQueryKey }),
+        queryClient.invalidateQueries({ queryKey: trendingKeys.all }),
+      ]);
+      cancelTrendingRefreshRef.current?.();
+      cancelTrendingRefreshRef.current = scheduleTrendingRefresh(() => {
+        void queryClient.refetchQueries({ queryKey: trendingKeys.all, type: "active" });
+      });
+    },
   });
 
   return (

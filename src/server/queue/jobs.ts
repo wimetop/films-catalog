@@ -34,7 +34,7 @@ export async function registerTrendingRebuild(): Promise<void> {
 
 export async function registerOutboxPublisher(): Promise<void> {
   const queue = getCatalogQueue();
-  await queue.upsertJobScheduler("outbox:publish:scheduled", { every: 1_000 }, {
+  await queue.upsertJobScheduler("outbox:publish:scheduled", { every: 2_000 }, {
     name: queueNames.outboxPublish,
     data: {},
     opts: { removeOnComplete: retention, removeOnFail: failedRetention },

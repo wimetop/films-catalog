@@ -1,7 +1,7 @@
 import { cleanupDeliveredOutboxEvents, getFavoriteCounts, getFavoriteCountsForItems, publishPendingOutboxEvents } from "@/entities/favorite/api/server";
+import { envServer } from "@/config/env";
 import { redis } from "@/server/cache/client";
 import { cacheKeys } from "@/server/cache/keys";
-import { queueNames } from "@/server/queue/names";
 import { getItems } from "@/entities/item/api/catalog-service";
 import { enqueueFavoriteRecount } from "@/server/queue/jobs";
 
@@ -16,6 +16,7 @@ export async function processFavoriteRecount(data: { itemIds: string[] }): Promi
 
   if (missingItemIds.length > 0) transaction.zrem(cacheKeys.trendingItems(), ...missingItemIds);
   if (counts.length > 0) transaction.zadd(cacheKeys.trendingItems(), ...counts.flatMap(({ itemId, total }) => [total, itemId]));
+  transaction.expire(cacheKeys.trendingItems(), envServer.trendingItemsTtlSeconds);
   transaction.del(cacheKeys.trendingTop());
   await transaction.exec();
 }
@@ -40,6 +41,7 @@ export async function processTrendingRebuild(): Promise<void> {
     const transaction = redis.multi();
     transaction.del(key);
     if (counts.length > 0) transaction.zadd(key, ...counts.flatMap(({ itemId, total }) => [total, itemId]));
+    transaction.expire(key, envServer.trendingItemsTtlSeconds);
     transaction.del(cacheKeys.trendingTop());
     await transaction.exec();
   } finally {
@@ -59,5 +61,3 @@ export async function processOutboxPublish(): Promise<void> {
 export async function processOutboxCleanup(): Promise<void> {
   await cleanupDeliveredOutboxEvents();
 }
-
-export { queueNames };

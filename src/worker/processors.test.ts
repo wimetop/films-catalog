@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   del: vi.fn(),
+  expire: vi.fn(),
   exec: vi.fn(),
   getFavoriteCountsForItems: vi.fn(),
   multi: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/entities/favorite/api/server", () => ({
 vi.mock("@/server/cache/client", () => ({
   redis: {
     del: mocks.del,
+    expire: mocks.expire,
     multi: mocks.multi,
     zadd: mocks.zadd,
     zrem: mocks.zrem,
@@ -40,6 +42,10 @@ vi.mock("@/entities/item/api/catalog-service", () => ({
   getItems: vi.fn(),
 }));
 
+vi.mock("@/config/env", () => ({
+  envServer: { trendingItemsTtlSeconds: 900 },
+}));
+
 vi.mock("@/server/queue/jobs", () => ({
   enqueueFavoriteRecount: vi.fn(),
 }));
@@ -51,6 +57,7 @@ describe("processFavoriteRecount", () => {
     vi.clearAllMocks();
     mocks.multi.mockReturnValue({
       del: mocks.del,
+      expire: mocks.expire,
       exec: mocks.exec,
       zadd: mocks.zadd,
       zrem: mocks.zrem,
@@ -72,5 +79,6 @@ describe("processFavoriteRecount", () => {
     );
     expect(mocks.zadd).not.toHaveBeenCalled();
     expect(mocks.del).toHaveBeenCalledWith("cat:v1:trending:top");
+    expect(mocks.expire).toHaveBeenCalledWith("trending:items", 900);
   });
 });

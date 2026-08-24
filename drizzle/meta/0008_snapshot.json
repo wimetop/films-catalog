@@ -630,6 +630,28 @@
             }
           ],
           "isUnique": false,
+          "where": "\"outbox_events\".\"delivered_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbox_events_delivered_idx": {
+          "name": "outbox_events_delivered_idx",
+          "columns": [{ "expression": "delivered_at", "isExpression": false, "asc": true, "nulls": "last" }],
+          "isUnique": false,
+          "where": "\"outbox_events\".\"delivered_at\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbox_events_terminal_idx": {
+          "name": "outbox_events_terminal_idx",
+          "columns": [
+            { "expression": "delivered_at", "isExpression": false, "asc": true, "nulls": "last" },
+            { "expression": "dead_lettered_at", "isExpression": false, "asc": true, "nulls": "last" }
+          ],
+          "isUnique": false,
+          "where": "\"outbox_events\".\"delivered_at\" is not null or \"outbox_events\".\"dead_lettered_at\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}

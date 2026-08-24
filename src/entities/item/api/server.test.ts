@@ -4,11 +4,14 @@ const dbMocks = vi.hoisted(() => ({
   select: vi.fn(),
 }));
 const cacheMocks = vi.hoisted(() => ({ readThroughCache: vi.fn(), withRedisTimeout: <T>(operation: Promise<T>) => operation }));
+const circuitMocks = vi.hoisted(() => ({ canUseRedis: vi.fn(() => true) }));
+const redisMocks = vi.hoisted(() => ({ get: vi.fn(async () => "1") }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({ db: dbMocks }));
 vi.mock("@/server/cache/cache-aside", () => cacheMocks);
-vi.mock("@/server/cache/client", () => ({ redis: { get: vi.fn(async () => "1") } }));
+vi.mock("@/server/cache/client", () => ({ redis: redisMocks }));
+vi.mock("@/server/cache/circuit-breaker", () => circuitMocks);
 vi.mock("@/config/env", () => ({ envServer: { cacheTtlItem: 300, cacheTtlList: 60 } }));
 vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
@@ -58,6 +61,24 @@ describe("getItemById", () => {
 
     await expect(getItems()).resolves.toEqual([]);
 
+    expect(cacheMocks.readThroughCache).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Redis version lookup while the cache circuit is open", async () => {
+    vi.clearAllMocks();
+    circuitMocks.canUseRedis.mockReturnValue(false);
+    const query = {
+      $dynamic: () => query,
+      from: () => query,
+      orderBy: () => query,
+      select: () => query,
+      then: (resolve: (value: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
+    };
+    dbMocks.select.mockReturnValue(query);
+
+    await expect(getItems()).resolves.toEqual([]);
+
+    expect(redisMocks.get).not.toHaveBeenCalled();
     expect(cacheMocks.readThroughCache).not.toHaveBeenCalled();
   });
 });

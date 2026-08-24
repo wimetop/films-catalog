@@ -68,6 +68,17 @@ export async function getFavoriteCounts(): Promise<Array<{ itemId: string; total
   return db.select({ itemId: favorites.itemId, total: count() }).from(favorites).groupBy(favorites.itemId);
 }
 
+export async function getTrendingItemIds(limit: number): Promise<string[]> {
+  const rows = await db
+    .select({ itemId: favorites.itemId, total: count() })
+    .from(favorites)
+    .groupBy(favorites.itemId)
+    .orderBy(desc(count()))
+    .limit(limit);
+
+  return rows.map((row) => row.itemId);
+}
+
 export async function getFavoriteCountsForItems(itemIds: string[]): Promise<Array<{ itemId: string; total: number }>> {
   if (itemIds.length === 0) return [];
 

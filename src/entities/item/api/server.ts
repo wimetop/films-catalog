@@ -32,6 +32,7 @@ export async function getItemById(id: string): Promise<Item | null> {
     redis: redis as unknown as Parameters<typeof readThroughCache<Item | null>>[0]["redis"],
     key: cacheKeys.item(id),
     ttlSeconds: envServer.cacheTtlItem,
+    staleTtlSeconds: 60,
     negativeTtlSeconds: 30,
     onHit: () => cacheStats.record("itemDetails", "hit"),
     onMiss: () => cacheStats.record("itemDetails", "miss"),

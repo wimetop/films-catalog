@@ -111,6 +111,7 @@ npm run worker    # термінал 3
 | `Stream isn't writeable and enableOfflineQueue options is false` | Запущено застарілий процес Next.js або worker зі старою конфігурацією Redis. Зупини процес через `Ctrl + C` і запусти його знову. Також перевір, що `REDIS_URL` — TCP URL `redis://` або `rediss://`, не Upstash REST URL. |
 | `Custom Id cannot contain :` | Працює застарілий worker або в Redis залишилися repeatable jobs зі старим `jobId`. Онови код і перезапусти `npm run worker`; нові jobs не задають custom `jobId`. |
 | `relation "outbox_events" does not exist` | Не застосовані outbox migrations. Виконай `npm run db:migrate` з коректним `DIRECT_URL`, потім перезапусти worker. |
+| `Invalid server environment: REDIS_URL ...` | У `.env.local` відсутній `REDIS_URL`. Скопіюй значення з прикладу нижче: локально `redis://localhost:6379`, для Upstash — TCP `rediss://...`, не REST URL. |
 | `Worker ready { queues: ['catalog', 'favorites'] }` | Це нормальне повідомлення: процес підключився до двох ізольованих BullMQ черг і очікує задачі. |
 
 ## Команди
@@ -167,11 +168,13 @@ src/
 
 ### Дані та кеш
 
-- Redis використовується як cache-aside: cache miss читає Postgres, а результат записується з TTL; недоступний Redis не ламає каталог, бо є fallback у БД.
+- Redis використовується як cache-aside зі stale-while-revalidate: після основного TTL список, деталі та trending можуть коротко віддати останнє валідне значення, поки один фоновий refresh оновлює його. Недоступний Redis не ламає каталог, бо є fallback у БД.
 - Ключі версіоновані (`cat:v1:*`); список має TTL 60 с, деталі — 300 с, а негативний кеш 404 — 30 с.
 - Single-flight Redis lock з TTL захищає гарячі ключі від cache stampede; lock звільняється лише власником token через атомарний Lua script.
 - BullMQ має ізольовані черги: `catalog` виконує scheduler/outbox/cache jobs, а `favorites` — тільки recount. Це не дозволяє масовим змінам обраного блокувати delivery outbox або прогрів каталогу.
-- Зміна favorite записується разом з `outbox_events` в одній транзакції Postgres. Окремий scheduler опитує pending outbox раз на секунду, групує до 100 подій у **одну** `favorites:recount` задачу з унікальними `itemId` і позначає події delivered лише після успішного enqueue. Після 10 помилок доставка переходить у dead-letter для діагностики, а не ретраїться нескінченно.
+- Зміна favorite записується разом з `outbox_events` в одній транзакції Postgres. Окремий scheduler опитує pending outbox раз на 2 секунди, групує до 100 подій у **одну** `favorites:recount` задачу з унікальними `itemId` і позначає події delivered лише після успішного enqueue. Після 10 помилок доставка переходить у dead-letter для діагностики, а не ретраїться нескінченно.
+- Якщо `favorites:recount` вичерпала 3 BullMQ attempts, outbox-події вже можуть бути delivered. Рейтинг тимчасово буде застарілим, але наступний `trending:rebuild` відновить Redis ZSET із Postgres; failed job потрібно перевірити в BullMQ monitoring/logs.
+- Після старту worker створює один `cache:warm` job. Публічні API `items` і `trending` мають distributed Redis rate limit лише за безпечної proxy identity; захист POST `/api/items` і favorites застосовується за `userId` завжди.
 
 - Початкові списки і деталі читаються серверними компонентами через Drizzle.
 - Публічний список `items` кешується лише Redis cache-aside з TTL 60 с; персональні favorites не кешуються на сервері між користувачами.

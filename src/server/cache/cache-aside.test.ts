@@ -67,6 +67,30 @@ describe("readThroughCache", () => {
     expect(load).toHaveBeenCalledOnce();
   });
 
+  it("returns a stale value immediately and refreshes it once in the background", async () => {
+    const redis = createRedis(new Map([[
+      "item:stale",
+      JSON.stringify({ value: { id: "old" }, freshUntil: Date.now() - 1 }),
+    ]]));
+    const load = vi.fn(async () => ({ id: "new" }));
+
+    await expect(readThroughCache({
+      redis,
+      key: "item:stale",
+      ttlSeconds: 60,
+      staleTtlSeconds: 30,
+      load,
+    })).resolves.toEqual({ id: "old" });
+
+    await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+    expect(redis.set).toHaveBeenCalledWith(
+      "item:stale",
+      expect.stringContaining('"id":"new"'),
+      "EX",
+      90,
+    );
+  });
+
   it("falls back to the loader when Redis is unavailable", async () => {
     const redis = createRedis();
     redis.get.mockRejectedValueOnce(new Error("Redis offline"));

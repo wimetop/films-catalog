@@ -9,6 +9,8 @@ type ReadThroughCacheOptions<T> = {
   redis: RedisCacheClient;
   key: string;
   ttlSeconds: number;
+  /** Additional period during which an expired value can be served while it refreshes in background. */
+  staleTtlSeconds?: number;
   negativeTtlSeconds?: number;
   load: () => Promise<T>;
   onHit?: () => void;
@@ -17,7 +19,7 @@ type ReadThroughCacheOptions<T> = {
   shouldCache?: (value: T) => boolean;
 };
 
-type CacheEnvelope<T> = { value: T };
+type CacheEnvelope<T> = { value: T; freshUntil?: number };
 import { cacheMissDatabaseSemaphore } from "./database-semaphore";
 import { canUseRedis, markRedisUnavailable } from "./circuit-breaker";
 import { cacheKeys } from "./keys";
@@ -58,7 +60,40 @@ export function withRedisTimeout<T>(operation: Promise<T>): Promise<T> {
   });
 }
 
-export async function readThroughCache<T>({ redis, key, ttlSeconds, negativeTtlSeconds, load, onHit, onMiss, parseCached, shouldCache }: ReadThroughCacheOptions<T>): Promise<T> {
+async function writeCacheValue<T>(
+  redis: RedisCacheClient,
+  key: string,
+  value: T,
+  ttlSeconds: number,
+  negativeTtlSeconds: number | undefined,
+  staleTtlSeconds: number | undefined,
+): Promise<void> {
+  const cacheTtlSeconds = value === null && negativeTtlSeconds ? negativeTtlSeconds : ttlSeconds;
+  const envelope: CacheEnvelope<T> = staleTtlSeconds && value !== null
+    ? { value, freshUntil: Date.now() + cacheTtlSeconds * 1_000 }
+    : { value };
+  await withRedisTimeout(redis.set(key, JSON.stringify(envelope), "EX", cacheTtlSeconds + (staleTtlSeconds ?? 0)));
+}
+
+function refreshStaleValue<T>({ redis, key, ttlSeconds, negativeTtlSeconds, staleTtlSeconds, load, shouldCache }: ReadThroughCacheOptions<T>): void {
+  void (async () => {
+    const lockKey = cacheKeys.lock(key);
+    const lockToken = crypto.randomUUID();
+    const acquiredLock = await withRedisTimeout(redis.set(lockKey, lockToken, "NX", "PX", lockTtlMilliseconds)).catch(() => null);
+    if (!acquiredLock) return;
+
+    try {
+      const value = await cacheMissDatabaseSemaphore.run(load);
+      if (shouldCache?.(value) ?? true) await writeCacheValue(redis, key, value, ttlSeconds, negativeTtlSeconds, staleTtlSeconds);
+    } catch (error) {
+      console.warn("Redis stale cache refresh failed", { key, message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      await withRedisTimeout(redis.eval(releaseLockScript, 1, lockKey, lockToken)).catch(() => undefined);
+    }
+  })();
+}
+
+export async function readThroughCache<T>({ redis, key, ttlSeconds, staleTtlSeconds, negativeTtlSeconds, load, onHit, onMiss, parseCached, shouldCache }: ReadThroughCacheOptions<T>): Promise<T> {
   if (!canUseRedis()) return runDatabaseLoadOnce(key, load);
 
   let cached: string | null;
@@ -76,6 +111,9 @@ export async function readThroughCache<T>({ redis, key, ttlSeconds, negativeTtlS
       const decoded: unknown = JSON.parse(cached);
       const value = parseCached ? parseCached(decoded) : (decoded as CacheEnvelope<T>).value;
       onHit?.();
+      if (staleTtlSeconds && typeof decoded === "object" && decoded !== null && "freshUntil" in decoded && typeof decoded.freshUntil === "number" && decoded.freshUntil <= Date.now()) {
+        refreshStaleValue({ redis, key, ttlSeconds, staleTtlSeconds, negativeTtlSeconds, load, shouldCache });
+      }
       return value;
     } catch (error) {
       console.warn("Invalid Redis cache value removed", { key, message: error instanceof Error ? error.message : String(error) });
@@ -112,7 +150,7 @@ export async function readThroughCache<T>({ redis, key, ttlSeconds, negativeTtlS
     const value = await cacheMissDatabaseSemaphore.run(load);
     try {
       if (shouldCache?.(value) ?? true) {
-        await withRedisTimeout(redis.set(key, JSON.stringify({ value }), "EX", value === null && negativeTtlSeconds ? negativeTtlSeconds : ttlSeconds));
+        await writeCacheValue(redis, key, value, ttlSeconds, negativeTtlSeconds, staleTtlSeconds);
       }
     } catch (error) {
       console.error("Redis cache write failed", { key, message: error instanceof Error ? error.message : String(error) });
