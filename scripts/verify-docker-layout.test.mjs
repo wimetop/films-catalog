@@ -61,6 +61,16 @@ for (const [source, expectedError] of [
   }, expectedError));
 }
 
+for (const [source, expectedError] of [
+  ["COPY --from=build --chown=node:node /app/tsconfig.json ./tsconfig.json", /seed must copy tsconfig for path aliases/],
+  ["COPY --from=build --chown=node:node /app/scripts/seed.ts ./scripts/seed.ts", /seed must copy only the seed program/],
+  ["COPY --from=build --chown=node:node /app/src/db/client.ts ./src/db/client.ts", /seed must copy its database client/],
+]) {
+  test(`requires seed input ${source}`, expectMutationFailure({
+    mutateDockerfile: (dockerfile) => dockerfile.replace(source, `# ${source}`),
+  }, expectedError));
+}
+
 test("rejects additional web COPY sources", expectMutationFailure({
   mutateDockerfile: (dockerfile) => dockerfile.replace(
     "COPY --from=build --chown=node:node /app/public ./public",

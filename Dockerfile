@@ -49,3 +49,10 @@ COPY --from=build --chown=node:node /app/src/db/schema ./src/db/schema
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
 USER node
 CMD ["./node_modules/.bin/drizzle-kit", "migrate", "--config=drizzle.config.ts"]
+
+FROM migrate AS seed
+COPY --from=build --chown=node:node /app/tsconfig.json ./tsconfig.json
+COPY --from=build --chown=node:node /app/scripts/seed.ts ./scripts/seed.ts
+COPY --from=build --chown=node:node /app/src/db/client.ts ./src/db/client.ts
+USER node
+CMD ["./node_modules/.bin/tsx", "scripts/seed.ts"]

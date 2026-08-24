@@ -50,7 +50,7 @@ if (fromLines.length === 0) {
 
 for (const fromLine of fromLines) {
   const image = fromLine.replace(/^FROM\s+/i, "").split(/\s+(?:AS\s+)?/i)[0];
-  if (image !== nodeImage && image !== "base" && image !== "deps") {
+  if (image !== nodeImage && image !== "base" && image !== "deps" && image !== "migrate") {
     fail(`unpinned or unexpected base image in: ${fromLine}`);
   }
 }
@@ -99,6 +99,13 @@ requireMatch(migrate, /COPY\s+--from=build\s+--chown=node:node\s+\/app\/drizzle\
 requireMatch(migrate, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/drizzle\.config\.ts\s+\.\/drizzle\.config\.ts\s*$/im, "migrate must copy the Drizzle config.");
 requireMatch(migrate, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/src\/db\/schema\s+\.\/src\/db\/schema\s*$/im, "migrate must copy the Drizzle schema.");
 requireMatch(migrate, /^COPY\s+--from=deps\s+--chown=node:node\s+\/app\/node_modules\s+\.\/node_modules\s*$/im, "migrate must copy Drizzle Kit from deps.");
+
+const seed = stageContents(dockerfile, "seed");
+requireMatch(seed, /^USER\s+node$/im, "the seed target must run as node.");
+requireMatch(seed, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/tsconfig\.json\s+\.\/tsconfig\.json\s*$/im, "seed must copy tsconfig for path aliases.");
+requireMatch(seed, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/scripts\/seed\.ts\s+\.\/scripts\/seed\.ts\s*$/im, "seed must copy only the seed program.");
+requireMatch(seed, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/src\/db\/client\.ts\s+\.\/src\/db\/client\.ts\s*$/im, "seed must copy its database client.");
+requireMatch(seed, /^CMD\s+\["\.\/node_modules\/\.bin\/tsx",\s*"scripts\/seed\.ts"\]$/im, "seed must start its seed program with tsx.");
 
 if (/^COPY\s+.*\.env/mi.test(dockerfile) || /^ADD\s+.*\.env/mi.test(dockerfile)) {
   fail("Dockerfile must not copy .env files.");
