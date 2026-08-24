@@ -3,7 +3,7 @@ import { Suspense } from "react";
 
 import { getFavoriteItemIds } from "@/entities/favorite/api/server";
 import { favoriteKeys } from "@/entities/favorite/model/query-keys";
-import { getItems } from "@/entities/item";
+import { getItems } from "@/entities/item/api/server";
 import { itemKeys } from "@/entities/item/model/query-keys";
 import { getCurrentSession } from "@/entities/session";
 import { getTrendingItems } from "@/entities/trending/api/server";

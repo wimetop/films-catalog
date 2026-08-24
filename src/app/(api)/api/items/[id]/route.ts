@@ -1,4 +1,4 @@
-import { getItemById } from "@/entities/item";
+import { getItemById } from "@/entities/item/api/server";
 import { isUuid } from "@/shared/lib/is-uuid";
 import { allowRequest, requestRateLimitIdentity } from "@/server/rate-limit/redis-rate-limit";
 
@@ -7,7 +7,8 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, { params }: RouteContext) {
-  if (!await allowRequest(`item:${requestRateLimitIdentity(request)}`, 120)) return Response.json({ message: "Too many requests" }, { status: 429 });
+  const identity = requestRateLimitIdentity(request);
+  if (identity && !await allowRequest(`item:${identity}`, 120)) return Response.json({ message: "Too many requests" }, { status: 429 });
   const { id } = await params;
 
   if (!isUuid(id)) {

@@ -1,22 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { createItem, getItems, revalidateCatalog } from "@/entities/item";
+import { createItem, getItems, revalidateCatalog } from "@/entities/item/api/server";
+import { normalizeCatalogPagination } from "@/entities/item/model/pagination";
 import { getCurrentSession } from "@/entities/session";
 import { allowRequest, requestRateLimitIdentity } from "@/server/rate-limit/redis-rate-limit";
 
-function positiveInt(value: string | null, fallback: number, maximum: number): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
-}
-
 export async function GET(request: Request) {
-  if (!await allowRequest(`items:${requestRateLimitIdentity(request)}`)) return NextResponse.json({ message: "Too many requests" }, { status: 429 });
+  const identity = requestRateLimitIdentity(request);
+  if (identity && !await allowRequest(`items:${identity}`)) return NextResponse.json({ message: "Too many requests" }, { status: 429 });
   const { searchParams } = new URL(request.url);
   const pageValue = searchParams.get("page");
   const pageSizeValue = searchParams.get("pageSize");
   if (!pageValue && !pageSizeValue) return NextResponse.json(await getItems());
-  const page = positiveInt(pageValue, 1, 10_000);
-  const pageSize = positiveInt(pageSizeValue, 20, 100);
+  const { page, pageSize } = normalizeCatalogPagination(pageValue, pageSizeValue);
   return NextResponse.json({ items: await getItems(page, pageSize), page, pageSize });
 }
 

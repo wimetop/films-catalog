@@ -41,4 +41,23 @@ describe("getItemById", () => {
       key: "cat:v1:items:list:v1:0:0", ttlSeconds: 60,
     }));
   });
+
+  it("does not read a stale catalog namespace when the version key times out", async () => {
+    vi.clearAllMocks();
+    cacheMocks.withRedisTimeout = vi.fn(async () => {
+      throw new Error("Redis command timed out");
+    });
+    const query = {
+      $dynamic: () => query,
+      from: () => query,
+      orderBy: () => query,
+      select: () => query,
+      then: (resolve: (value: unknown[]) => unknown) => Promise.resolve([]).then(resolve),
+    };
+    dbMocks.select.mockReturnValue(query);
+
+    await expect(getItems()).resolves.toEqual([]);
+
+    expect(cacheMocks.readThroughCache).not.toHaveBeenCalled();
+  });
 });

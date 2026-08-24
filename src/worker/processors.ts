@@ -1,18 +1,27 @@
-import { cleanupDeliveredOutboxEvents, countFavoritesForItem, getFavoriteCounts, publishPendingOutboxEvents } from "@/entities/favorite/api/server";
+import { cleanupDeliveredOutboxEvents, getFavoriteCounts, getFavoriteCountsForItems, publishPendingOutboxEvents } from "@/entities/favorite/api/server";
 import { redis } from "@/server/cache/client";
 import { cacheKeys } from "@/server/cache/keys";
 import { queueNames } from "@/server/queue/names";
-import { getItems } from "@/entities/item";
+import { getItems } from "@/entities/item/api/catalog-service";
 import { enqueueFavoriteRecount } from "@/server/queue/jobs";
 
-export async function processFavoriteRecount(data: { itemId: string }): Promise<void> {
-  const total = await countFavoritesForItem(data.itemId);
-  await redis.zadd(cacheKeys.trendingItems(), total, data.itemId);
-  await redis.del(cacheKeys.item(data.itemId), cacheKeys.trendingTop());
+export async function processFavoriteRecount(data: { itemIds: string[] }): Promise<void> {
+  const itemIds = [...new Set(data.itemIds)];
+  if (itemIds.length === 0) return;
+
+  const counts = await getFavoriteCountsForItems(itemIds);
+  const countsByItemId = new Set(counts.map(({ itemId }) => itemId));
+  const missingItemIds = itemIds.filter((itemId) => !countsByItemId.has(itemId));
+  const transaction = redis.multi();
+
+  if (missingItemIds.length > 0) transaction.zrem(cacheKeys.trendingItems(), ...missingItemIds);
+  if (counts.length > 0) transaction.zadd(cacheKeys.trendingItems(), ...counts.flatMap(({ itemId, total }) => [total, itemId]));
+  transaction.del(cacheKeys.trendingTop());
+  await transaction.exec();
 }
 
 export async function processTrendingRebuild(): Promise<void> {
-  const lockKey = "lock:trending:rebuild";
+  const lockKey = cacheKeys.lock("trending:rebuild");
   const token = crypto.randomUUID();
   const acquired = await redis.set(lockKey, token, "PX", 60_000, "NX");
   if (!acquired) return;
@@ -44,7 +53,7 @@ export async function processCacheWarm(): Promise<void> {
 }
 
 export async function processOutboxPublish(): Promise<void> {
-  await publishPendingOutboxEvents(process.env.HOSTNAME ?? `worker:${process.pid}`, (itemId) => enqueueFavoriteRecount({ itemId }));
+  await publishPendingOutboxEvents(process.env.HOSTNAME ?? `worker:${process.pid}`, (itemIds) => enqueueFavoriteRecount({ itemIds }));
 }
 
 export async function processOutboxCleanup(): Promise<void> {

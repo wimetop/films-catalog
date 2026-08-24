@@ -2,7 +2,7 @@ import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-import { getItemById } from "@/entities/item";
+import { getItemById } from "@/entities/item/api/server";
 import { getFavoriteItemIds } from "@/entities/favorite/api/server";
 import { favoriteKeys } from "@/entities/favorite/model/query-keys";
 import { getCurrentSession } from "@/entities/session";

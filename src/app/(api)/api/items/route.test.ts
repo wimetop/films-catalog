@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   revalidateCatalog: vi.fn(),
 }));
 
-vi.mock("@/entities/item", () => ({
+vi.mock("@/entities/item/api/server", () => ({
   createItem: mocks.createItem,
   getItems: mocks.getItems,
   revalidateCatalog: mocks.revalidateCatalog,

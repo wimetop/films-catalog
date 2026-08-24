@@ -43,6 +43,27 @@
       "when": 1787341800000,
       "tag": "0005_outbox_cleanup_index",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787342400000,
+      "tag": "0006_favorites_item_id_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787343000000,
+      "tag": "0007_outbox_dead_letter",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787562888648,
+      "tag": "0008_metadata_baseline",
+      "breakpoints": true
     }
   ]
 }

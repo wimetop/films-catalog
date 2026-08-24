@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addFavoriteRequest, fetchFavoriteIds, removeFavoriteRequest } from "@/entities/favorite/api/client";
 import { favoriteKeys } from "@/entities/favorite/model/query-keys";
 import type { Item } from "@/entities/item/model/types";
+import { trendingKeys } from "@/entities/trending/model/query-keys";
 
 type FavoriteButtonProps = { item: Item; userId: string };
 
@@ -42,6 +43,7 @@ export function FavoriteButton({ item, userId }: FavoriteButtonProps) {
     onSettled: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: idsQueryKey }),
       queryClient.invalidateQueries({ queryKey: listQueryKey }),
+      queryClient.invalidateQueries({ queryKey: trendingKeys.all }),
     ]),
   });
 

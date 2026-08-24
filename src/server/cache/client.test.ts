@@ -21,12 +21,23 @@ vi.mock("ioredis", () => ({
 }));
 
 describe("Redis cache client", () => {
-  it("queues the first request while a lazy connection is opening", async () => {
+  it("queues the first request and reconnects with a bounded backoff", async () => {
     await import("./client");
 
-    expect(createdOptions[0]).toMatchObject({
+    const options = createdOptions[0] as {
+      enableOfflineQueue: boolean;
+      lazyConnect: boolean;
+      maxRetriesPerRequest: number;
+      retryStrategy: (attempt: number) => number;
+    };
+
+    expect(options).toMatchObject({
       lazyConnect: true,
       enableOfflineQueue: true,
+      maxRetriesPerRequest: 2,
     });
+    expect(options.retryStrategy(1)).toBeGreaterThanOrEqual(200);
+    expect(options.retryStrategy(1)).toBeLessThan(300);
+    expect(options.retryStrategy(100)).toBeLessThanOrEqual(2_000);
   });
 });

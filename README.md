@@ -109,9 +109,9 @@ npm run worker    # термінал 3
 | Повідомлення | Причина та дія |
 | --- | --- |
 | `Stream isn't writeable and enableOfflineQueue options is false` | Запущено застарілий процес Next.js або worker зі старою конфігурацією Redis. Зупини процес через `Ctrl + C` і запусти його знову. Також перевір, що `REDIS_URL` — TCP URL `redis://` або `rediss://`, не Upstash REST URL. |
-| `Custom Id cannot contain :` | Працює застарілий worker. Онови код і перезапусти саме `npm run worker`; новий код створює BullMQ `jobId` без `:`. |
+| `Custom Id cannot contain :` | Працює застарілий worker або в Redis залишилися repeatable jobs зі старим `jobId`. Онови код і перезапусти `npm run worker`; нові jobs не задають custom `jobId`. |
 | `relation "outbox_events" does not exist` | Не застосовані outbox migrations. Виконай `npm run db:migrate` з коректним `DIRECT_URL`, потім перезапусти worker. |
-| `Worker ready { queue: 'catalog' }` | Це нормальне повідомлення: воркер підключився до черги й очікує задачі. |
+| `Worker ready { queues: ['catalog', 'favorites'] }` | Це нормальне повідомлення: процес підключився до двох ізольованих BullMQ черг і очікує задачі. |
 
 ## Команди
 
@@ -128,7 +128,7 @@ npm run worker    # термінал 3
 | `npm run db:security:verify` | перевірити RLS і відсутність Data API `SELECT` доступу |
 | `npm run db:seed` | додати 10 тестових фільмів |
 | `npm run test:e2e:local` | перевірити register/login/favorites через локальний dev server |
-| `npm run worker` | окремий BullMQ worker для Trending і прогріву кешу |
+| `npm run worker` | окремий BullMQ-процес: `catalog` worker для scheduler/outbox/cache і `favorites` worker для пакетного recount |
 
 ### Production migrations
 
@@ -139,7 +139,7 @@ npm ci
 npm run db:migrate
 ```
 
-Для поточного Redis/outbox релізу обов'язкові migrations `drizzle/0002_supreme_giant_man.sql`–`drizzle/0005_outbox_cleanup_index.sql`.
+Для поточного Redis/outbox релізу обов'язкові migrations `drizzle/0002_supreme_giant_man.sql`–`drizzle/0006_favorites_item_id_index.sql`.
 
 Не використовуйте `npm run db:push` у production: ця команда синхронізує schema напряму і не є контрольованим migration rollout. Після успішної міграції deploy API, а worker запускайте окремим процесом:
 
@@ -170,14 +170,15 @@ src/
 - Redis використовується як cache-aside: cache miss читає Postgres, а результат записується з TTL; недоступний Redis не ламає каталог, бо є fallback у БД.
 - Ключі версіоновані (`cat:v1:*`); список має TTL 60 с, деталі — 300 с, а негативний кеш 404 — 30 с.
 - Single-flight Redis lock з TTL захищає гарячі ключі від cache stampede; lock звільняється лише власником token через атомарний Lua script.
-- BullMQ worker перераховує favorites і підтримує Redis ZSET `trending:items`; Postgres завжди лишається джерелом істини.
+- BullMQ має ізольовані черги: `catalog` виконує scheduler/outbox/cache jobs, а `favorites` — тільки recount. Це не дозволяє масовим змінам обраного блокувати delivery outbox або прогрів каталогу.
+- Зміна favorite записується разом з `outbox_events` в одній транзакції Postgres. Окремий scheduler опитує pending outbox раз на секунду, групує до 100 подій у **одну** `favorites:recount` задачу з унікальними `itemId` і позначає події delivered лише після успішного enqueue. Після 10 помилок доставка переходить у dead-letter для діагностики, а не ретраїться нескінченно.
 
 - Початкові списки і деталі читаються серверними компонентами через Drizzle.
-- Публічний список `items` має Next Data Cache з revalidation раз на 60 секунд; персональні favorites не кешуються на сервері між користувачами.
+- Публічний список `items` кешується лише Redis cache-aside з TTL 60 с; персональні favorites не кешуються на сервері між користувачами.
 - Сервер попередньо завантажує query-дані, а `HydrationBoundary` передає dehydrated cache у TanStack Query без зайвого клієнтського запиту після першого рендера.
 - Ключі обраного мають форми `['favorites', userId, 'ids']` і `['favorites', userId, 'list']`; це не дозволяє кешу одного користувача потрапити до іншого.
 - Мутації обраного оптимістично оновлюють UI, виконують rollback при помилці та інвалідують відповідний ключ.
-- Після `POST /api/items` викликається `revalidateTag('items', 'max')`: кеш каталогу позначається застарілим і оновлюється за stale-while-revalidate моделлю.
+- Після `POST /api/items` Redis version key інкрементується: наступне читання використовує новий cache namespace, а воркер асинхронно прогріває базовий список.
 
 ### Безпека
 
@@ -186,6 +187,14 @@ src/
 - У БД є унікальний індекс `(user_id, item_id)`, який забороняє дублікати.
 - RLS увімкнено для всіх таблиць, а ролі Supabase Data API `anon` та `authenticated` не мають `SELECT` доступу. Застосунок працює через серверне Drizzle-підключення.
 - `.env.local` не потрапляє у Git; `.env.example` навмисно є винятком і має бути закомічений.
+
+### Rate limiting у production
+
+- Favorites API має distributed Redis rate limit за `userId` незалежно від проксі.
+- Публічні `/api/items` та `/api/items/[id]` обмежуються за IP лише коли `TRUST_PROXY_FOR_RATE_LIMIT=true`: у такому разі **лише** ваш reverse proxy/CDN має бути доступним до Next.js і він має коректно встановлювати `X-Forwarded-For`.
+- Якщо Next.js доступний напряму, залишайте змінну `false`: застосунок не створює спільний bucket для всіх відвідувачів. Для захисту від bot flood у цій конфігурації потрібен CDN/WAF або reverse proxy перед застосунком.
+
+`/api/cache/stats` доступний лише у development для локальної діагностики. Це process-local counters, тому вони не є production telemetry і навмисно повертають `404` у production.
 
 ## Перевірка сценаріїв
 

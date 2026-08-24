@@ -1,0 +1,4 @@
+-- Metadata-only baseline.
+-- Migrations 0006 and 0007 already create these schema objects. This no-op aligns
+-- Drizzle snapshots with the committed migration history so future generation
+-- does not attempt to recreate them.

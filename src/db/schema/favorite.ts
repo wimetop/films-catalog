@@ -1,4 +1,4 @@
-import { uniqueIndex, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
 import { items } from "./item";
@@ -20,5 +20,6 @@ export const favorites = pgTable(
       table.userId,
       table.itemId,
     ),
+    index("favorites_item_id_idx").on(table.itemId),
   ],
 );

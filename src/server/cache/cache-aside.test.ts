@@ -8,6 +8,7 @@ function createRedis(values = new Map<string, string>()) {
     eval: vi.fn(async (_script: string, _keys: number, key: string, token: string) =>
       values.get(key) === token ? Number(values.delete(key)) : 0,
     ),
+    del: vi.fn(async (key: string) => Number(values.delete(key))),
     get: vi.fn(async (key: string) => values.get(key) ?? null),
     set: vi.fn(async (key: string, value: string, ...args: unknown[]) => {
       if (args.includes("NX") && values.has(key)) return null;
@@ -44,6 +45,7 @@ describe("readThroughCache", () => {
       },
     })).resolves.toEqual({ id: "1" });
     expect(load).toHaveBeenCalledOnce();
+    expect(redis.del).toHaveBeenCalledWith("item:1");
   });
 
   it("loads and stores a DTO after a cache miss", async () => {
@@ -95,6 +97,20 @@ describe("readThroughCache", () => {
     await expect(Promise.all(requests)).resolves.toHaveLength(26);
   });
 
+  it("coalesces concurrent same-key fallbacks while Redis is unavailable", async () => {
+    const redis = createRedis();
+    redis.get.mockRejectedValue(new Error("Redis offline"));
+    let resolveLoad: ((value: { id: string }) => void) | undefined;
+    const load = vi.fn(() => new Promise<{ id: string }>((resolve) => { resolveLoad = resolve; }));
+
+    const first = readThroughCache({ redis, key: "item:redis-down", ttlSeconds: 60, load });
+    const second = readThroughCache({ redis, key: "item:redis-down", ttlSeconds: 60, load });
+    await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+    resolveLoad?.({ id: "1" });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([{ id: "1" }, { id: "1" }]);
+  });
+
   it("uses one loader for concurrent misses of the same key", async () => {
     const redis = createRedis();
     let resolveLoad: ((value: { id: string }) => void) | undefined;
@@ -107,4 +123,41 @@ describe("readThroughCache", () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual([{ id: "1" }, { id: "1" }]);
   });
+
+  it("records a single-flight waiter as a cache hit after it observes the populated value", async () => {
+    const redis = createRedis();
+    let resolveLoad: ((value: { id: string }) => void) | undefined;
+    const load = vi.fn(() => new Promise<{ id: string }>((resolve) => { resolveLoad = resolve; }));
+    const onHit = vi.fn();
+    const onMiss = vi.fn();
+
+    const first = readThroughCache({ redis, key: "item:1", ttlSeconds: 60, load, onHit, onMiss });
+    const second = readThroughCache({ redis, key: "item:1", ttlSeconds: 60, load, onHit, onMiss });
+    await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+    resolveLoad?.({ id: "1" });
+
+    await Promise.all([first, second]);
+
+    expect(onMiss).toHaveBeenCalledOnce();
+    expect(onHit).toHaveBeenCalledOnce();
+  });
+});
+
+it("does not cache a result rejected by shouldCache", async () => {
+  const redis = createRedis();
+  const load = vi.fn(async () => [] as string[]);
+
+  await readThroughCache({
+    redis,
+    key: "trending:top",
+    ttlSeconds: 120,
+    shouldCache: (items) => items.length > 0,
+    load,
+  });
+
+  const writesToTrendingCache = redis.set.mock.calls.filter(
+    ([key]) => key === "trending:top",
+  );
+
+  expect(writesToTrendingCache).toHaveLength(0);
 });

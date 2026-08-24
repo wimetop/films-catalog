@@ -4,12 +4,25 @@ import { envServer } from "@/config/env";
 
 import { queueNames } from "./names";
 
-const globalForQueue = globalThis as typeof globalThis & { catalogQueue?: Queue };
+const globalForQueue = globalThis as typeof globalThis & {
+  catalogQueue?: Queue;
+  favoritesQueue?: Queue;
+};
 
-export function getCatalogQueue(): Queue {
-  globalForQueue.catalogQueue ??= new Queue(queueNames.catalog, {
+function createQueue(name: string): Queue {
+  return new Queue(name, {
     connection: { url: envServer.redisUrl, connectTimeout: 5_000, maxRetriesPerRequest: null },
   });
+}
+
+export function getCatalogQueue(): Queue {
+  globalForQueue.catalogQueue ??= createQueue(queueNames.catalog);
 
   return globalForQueue.catalogQueue;
+}
+
+export function getFavoritesQueue(): Queue {
+  globalForQueue.favoritesQueue ??= createQueue(queueNames.favorites);
+
+  return globalForQueue.favoritesQueue;
 }

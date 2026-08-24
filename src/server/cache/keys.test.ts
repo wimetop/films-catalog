@@ -9,8 +9,8 @@ describe("cacheKeys", () => {
     expect(cacheKeys.trendingTop()).toBe("cat:v1:trending:top");
   });
 
-  it("isolates favorite-list keys by user", () => {
-    expect(cacheKeys.favoriteList("user-a")).toBe("cat:v1:fav:list:user-a");
-    expect(cacheKeys.favoriteList("user-a")).not.toBe(cacheKeys.favoriteList("user-b"));
+  it("does not expose unused favorite cache keys", () => {
+    expect(cacheKeys).not.toHaveProperty("favoriteCount");
+    expect(cacheKeys).not.toHaveProperty("favoriteList");
   });
 });
