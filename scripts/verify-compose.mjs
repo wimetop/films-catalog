@@ -7,6 +7,7 @@ function configuredPath(variable, fallback) {
 }
 
 const composePath = configuredPath("COMPOSE_PATH", new URL("../docker-compose.yml", import.meta.url));
+const localDbComposePath = configuredPath("LOCAL_DB_COMPOSE_PATH", new URL("../docker-compose.local-db.yml", import.meta.url));
 
 function fail(message) {
   console.error(`Compose verification failed: ${message}`);
@@ -19,12 +20,27 @@ function requireMatch(value, pattern, description) {
   }
 }
 
-let compose;
-try {
-  compose = await readFile(composePath, "utf8");
-} catch {
-  fail("docker-compose.yml is missing.");
+function serviceContents(compose, service) {
+  const match = compose.match(new RegExp(`^  ${service}:\\s*\\n([\\s\\S]*?)(?=^  [\\w-]+:\\s*$|^(?:volumes|networks):|(?![\\s\\S]))`, "m"));
+  if (!match) {
+    fail(`the ${service} service is missing.`);
+  }
+
+  return match[1];
 }
+
+async function readRequiredFile(path, label) {
+  try {
+    return await readFile(path, "utf8");
+  } catch {
+    fail(`${label} is missing.`);
+  }
+}
+
+const [compose, localDbCompose] = await Promise.all([
+  readRequiredFile(composePath, "docker-compose.yml"),
+  readRequiredFile(localDbComposePath, "docker-compose.local-db.yml"),
+]);
 
 for (const service of ["redis", "migrate", "web", "worker", "postgres", "seed"]) {
   requireMatch(compose, new RegExp(`^  ${service}:\\s*$`, "m"), `the ${service} service is missing.`);
@@ -32,7 +48,7 @@ for (const service of ["redis", "migrate", "web", "worker", "postgres", "seed"])
 
 requireMatch(compose, /redis-server\s+--appendonly\s+yes[\s\S]*?--maxmemory-policy\s+noeviction/, "Redis must use append-only persistence and noeviction.");
 requireMatch(compose, /redis:[\s\S]*?healthcheck:[\s\S]*?redis-cli[\s\S]*?ping/, "Redis must have a redis-cli ping healthcheck.");
-requireMatch(compose, /^networks:\s*\n  app-network:\s*\n    internal: true$/m, "the app network must be private.");
+requireMatch(compose, /^networks:\s*\n  app-network:\s*\{\}\s*$/m, "the app network must allow egress while private services remain unpublished.");
 
 const hostPorts = [...compose.matchAll(/^\s+-\s+"?(\d+):\d+"?\s*$/gm)];
 if (hostPorts.length !== 1 || hostPorts[0][1] !== "3000") {
@@ -56,5 +72,21 @@ requireMatch(compose, /seed:[\s\S]*?profiles:\s*\n\s+-\s+demo/, "seed must be op
 requireMatch(compose, /seed:[\s\S]*?depends_on:[\s\S]*?migrate:\s*\n\s+condition:\s+service_completed_successfully/, "seed must wait for successful migrations.");
 requireMatch(compose, /web:[\s\S]*?build:[\s\S]*?args:[\s\S]*?NEXT_PUBLIC_APP_URL:/, "web must pass NEXT_PUBLIC_APP_URL as a build argument.");
 requireMatch(compose, /seed:[\s\S]*?target:\s+seed/, "seed must use the dedicated seed image target.");
+
+const localPostgresUrl = "postgresql://filmscatalog:local-development-password@postgres:5432/filmscatalog";
+for (const [service, variables] of [
+  ["migrate", ["DIRECT_URL"]],
+  ["web", ["DATABASE_URL", "DIRECT_URL"]],
+  ["worker", ["DATABASE_URL", "DIRECT_URL"]],
+  ["seed", ["DATABASE_URL"]],
+]) {
+  for (const variable of variables) {
+    requireMatch(
+      serviceContents(localDbCompose, service),
+      new RegExp(`^      ${variable}:\\s+${localPostgresUrl.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")}$`, "m"),
+      `the local-db override must force ${service}.${variable} to the private Postgres URL.`,
+    );
+  }
+}
 
 console.info("Compose verification passed.");
