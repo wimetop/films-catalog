@@ -9,7 +9,9 @@ bundle.
 
 ## Selected Architecture
 
-One multi-stage `Dockerfile` produces three purpose-built final targets:
+One multi-stage `Dockerfile` produces three purpose-built final targets from the
+fixed `node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32`
+digest:
 
 - `web` contains Next.js standalone output, static assets, and `public`; it
   starts with `node server.js`.
@@ -17,7 +19,8 @@ One multi-stage `Dockerfile` produces three purpose-built final targets:
   production runtime dependencies it requires; it starts with
   `node dist/worker/index.js`, never `tsx`.
 - `migrate` contains Drizzle Kit, the schema and checked-in `drizzle` SQL
-  migrations.  It is a one-shot service and runs with `DIRECT_URL`.
+  migrations. It is a one-shot service, runs with `DIRECT_URL`, and runs as
+  non-root `node` with migration files copied using `--chown=node:node`.
 
 The shared `deps` stage copies `package.json` and `package-lock.json` before
 `npm ci`, preserving Docker layer caching.  The shared `build` stage then copies
@@ -68,23 +71,29 @@ validation message. Secrets are never copied into image layers.
 ## Health and Shutdown
 
 `GET /api/health` is public and dynamically checks the Drizzle database connection
-and Redis ping. It returns `200 {"status":"ok"}` only if both are reachable;
-otherwise it returns `503` with safe per-dependency statuses, without credentials
-or raw connection errors. Web's Docker healthcheck calls this endpoint.
+and Redis ping. It returns `200 {"status":"ok"}` if both are reachable, and
+`200 {"status":"degraded", "database":"ok", "redis":"down"}` when only Redis
+is unavailable. It returns `503` only when Postgres is unavailable, with safe
+per-dependency statuses and without credentials or raw connection errors. Web's
+Docker healthcheck calls this endpoint, so a cache outage cannot remove an otherwise
+working application from traffic.
 
 Redis failure does not change the app's existing cache-aside graceful-degradation:
 normal catalog requests may fall back to Postgres. The health endpoint still reports
 the dependency failure so readiness reflects the full deployment state.
 
-Compose `init: true` lets SIGTERM reach the worker. Its existing shutdown handler
+Compose `init: true` lets SIGTERM reach the worker. Worker has a Docker liveness
+healthcheck which performs a light Redis connectivity ping using its production
+Node runtime. Its existing shutdown handler
 closes BullMQ workers and queues before Redis; `stop_grace_period` gives inflight
 jobs time to finish. The web process is similarly terminated by the standard Node
 server signal path.
 
 ## Verification and Documentation
 
-Add health route unit tests for healthy and unavailable dependency states. Run the
-worker production bundle directly with Node as a build verification. Validate
+Add health route unit tests for healthy, Redis-degraded, and database-unavailable
+states. Run the worker production bundle directly with Node as a build verification.
+Validate
 `docker compose config`; build and run Compose when Docker is available. README
 documents environment setup, `docker compose up --build`, optional
 `local-db`/`demo` profiles, migration behavior, Redis graceful degradation, and
