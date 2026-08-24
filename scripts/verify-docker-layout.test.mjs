@@ -5,10 +5,13 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
-const root = new URL("../", import.meta.url);
 const dockerfilePath = new URL("../Dockerfile", import.meta.url);
 const dockerignorePath = new URL("../.dockerignore", import.meta.url);
 const verifierPath = new URL("./verify-docker-layout.mjs", import.meta.url);
+
+function normalizeNewlines(value) {
+  return value.replace(/\r\n/g, "\n");
+}
 
 async function runMutation({ mutateDockerfile = (value) => value, mutateDockerignore = (value) => value }) {
   const fixtureDirectory = await mkdtemp(join(tmpdir(), "filmscatalog-docker-layout-"));
@@ -18,11 +21,11 @@ async function runMutation({ mutateDockerfile = (value) => value, mutateDockerig
   try {
     await cp(dockerfilePath, fixtureDockerfile);
     await cp(dockerignorePath, fixtureDockerignore);
-    await writeFile(fixtureDockerfile, mutateDockerfile(await readFile(fixtureDockerfile, "utf8")));
-    await writeFile(fixtureDockerignore, mutateDockerignore(await readFile(fixtureDockerignore, "utf8")));
+    await writeFile(fixtureDockerfile, mutateDockerfile(normalizeNewlines(await readFile(fixtureDockerfile, "utf8"))));
+    await writeFile(fixtureDockerignore, mutateDockerignore(normalizeNewlines(await readFile(fixtureDockerignore, "utf8"))));
 
     return spawnSync(process.execPath, [fileURLToPath(verifierPath)], {
-      cwd: fileURLToPath(root),
+      cwd: fixtureDirectory,
       encoding: "utf8",
       env: {
         ...process.env,

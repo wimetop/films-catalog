@@ -20,6 +20,10 @@ async function readOptional(path) {
   }
 }
 
+function normalizeNewlines(value) {
+  return value.replace(/\r\n/g, "\n");
+}
+
 async function runMutation({
   mutateCompose = (value) => value,
   mutateLocalDbCompose = (value) => value,
@@ -37,12 +41,13 @@ async function runMutation({
     await writeFile(fixtureLocalDbCompose, await readOptional(localDbComposePath));
     await writeFile(fixtureDevRedisCompose, await readOptional(devRedisComposePath));
     await writeFile(fixtureLocalPostgresRoles, await readOptional(localPostgresRolesPath));
-    await writeFile(fixtureCompose, mutateCompose(await readFile(fixtureCompose, "utf8")));
-    await writeFile(fixtureLocalDbCompose, mutateLocalDbCompose(await readFile(fixtureLocalDbCompose, "utf8")));
-    await writeFile(fixtureDevRedisCompose, mutateDevRedisCompose(await readFile(fixtureDevRedisCompose, "utf8")));
-    await writeFile(fixtureLocalPostgresRoles, mutateLocalPostgresRoles(await readFile(fixtureLocalPostgresRoles, "utf8")));
+    await writeFile(fixtureCompose, mutateCompose(normalizeNewlines(await readFile(fixtureCompose, "utf8"))));
+    await writeFile(fixtureLocalDbCompose, mutateLocalDbCompose(normalizeNewlines(await readFile(fixtureLocalDbCompose, "utf8"))));
+    await writeFile(fixtureDevRedisCompose, mutateDevRedisCompose(normalizeNewlines(await readFile(fixtureDevRedisCompose, "utf8"))));
+    await writeFile(fixtureLocalPostgresRoles, mutateLocalPostgresRoles(normalizeNewlines(await readFile(fixtureLocalPostgresRoles, "utf8"))));
 
     return spawnSync(process.execPath, [fileURLToPath(verifierPath)], {
+      cwd: fixtureDirectory,
       encoding: "utf8",
       env: {
         ...process.env,
@@ -61,7 +66,7 @@ test("keeps private services unpublished while allowing external database egress
   const compose = await readOptional(composePath);
 
   expect(compose).not.toMatch(/^networks:\s*\n  app-network:\s*\n    internal:\s*true$/m);
-  expect(compose.match(/^\s+-\s+"?\d+:\d+"?\s*$/gm)).toEqual(["      - \"3000:3000\""]);
+  expect([...compose.matchAll(/^[ \t]*-[ \t]*"?(\d+):\d+"?[ \t]*\r?$/gm)].map((match) => match[1])).toEqual(["3000"]);
 });
 
 test("provides a host-development Redis stack without application environment requirements", async () => {
