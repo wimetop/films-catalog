@@ -27,7 +27,7 @@ export async function getTrendingItems() {
 
       try {
         const ids = await withRedisTimeout(redis.zrevrange(cacheKeys.trendingItems(), 0, envServer.trendingTopN - 1));
-        return getItemsByIds(ids);
+        return ids.length > 0 ? getItemsByIds(ids) : loadTrendingFromDatabase();
       } catch (error) {
         markRedisUnavailable();
         console.warn("Trending database fallback activated", { message: error instanceof Error ? error.message : String(error) });

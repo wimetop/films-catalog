@@ -42,10 +42,6 @@ vi.mock("@/entities/item/api/catalog-service", () => ({
   getItems: vi.fn(),
 }));
 
-vi.mock("@/config/env", () => ({
-  envServer: { trendingItemsTtlSeconds: 900 },
-}));
-
 vi.mock("@/server/queue/jobs", () => ({
   enqueueFavoriteRecount: vi.fn(),
 }));
@@ -79,6 +75,6 @@ describe("processFavoriteRecount", () => {
     );
     expect(mocks.zadd).not.toHaveBeenCalled();
     expect(mocks.del).toHaveBeenCalledWith("cat:v1:trending:top");
-    expect(mocks.expire).toHaveBeenCalledWith("trending:items", 900);
+    expect(mocks.expire).not.toHaveBeenCalled();
   });
 });

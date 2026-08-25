@@ -30,6 +30,11 @@ vi.mock("@/server/cache/cache-aside", () => ({
   withRedisTimeout: <T>(operation: Promise<T>) => operation,
 }));
 
+vi.mock("@/server/cache/circuit-breaker", () => ({
+  canUseRedis: () => true,
+  markRedisUnavailable: vi.fn(),
+}));
+
 vi.mock("@/server/cache/keys", () => ({
   cacheKeys: {
     trendingItems: () => "trending:items",
@@ -59,6 +64,16 @@ describe("getTrendingItems", () => {
 
   it("falls back to the database projection when Redis ranking is unavailable", async () => {
     mocks.zrevrange.mockRejectedValue(new Error("Redis unavailable"));
+    mocks.getTrendingItemIds.mockResolvedValue(["item-2", "item-1"]);
+    mocks.getItemsByIds.mockResolvedValue([{ id: "item-2" }, { id: "item-1" }]);
+    mocks.readThroughCache.mockImplementation(async (options: { load: () => Promise<unknown> }) => options.load());
+
+    await expect(getTrendingItems()).resolves.toEqual([{ id: "item-2" }, { id: "item-1" }]);
+    expect(mocks.getTrendingItemIds).toHaveBeenCalledWith(10);
+  });
+
+  it("falls back to the database projection when the Redis ranking is empty", async () => {
+    mocks.zrevrange.mockResolvedValue([]);
     mocks.getTrendingItemIds.mockResolvedValue(["item-2", "item-1"]);
     mocks.getItemsByIds.mockResolvedValue([{ id: "item-2" }, { id: "item-1" }]);
     mocks.readThroughCache.mockImplementation(async (options: { load: () => Promise<unknown> }) => options.load());

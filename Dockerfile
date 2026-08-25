@@ -8,6 +8,12 @@ RUN npm ci
 FROM deps AS production-deps
 RUN npm prune --omit=dev
 
+FROM base AS worker-deps
+WORKDIR /runtime
+# The bundle externalizes only BullMQ and ioredis. Installing from a clean
+# manifest prevents Better Auth's transitive developer tooling entering worker.
+RUN npm init -y && npm install --omit=dev --no-save bullmq@6.2.0 ioredis@6.0.0
+
 FROM deps AS build
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
@@ -35,7 +41,7 @@ CMD ["node", "server.js"]
 FROM base AS worker
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=production-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=worker-deps --chown=node:node /runtime/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist/worker ./dist/worker
 USER node
 CMD ["node", "dist/worker/index.js"]

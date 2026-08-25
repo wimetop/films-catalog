@@ -50,9 +50,9 @@ test("requires cached dependency manifests before npm ci", expectMutationFailure
   mutateDockerfile: (dockerfile) => dockerfile.replace("COPY package.json package-lock.json ./", "COPY package.json ./"),
 }, /deps must copy package\.json and package-lock\.json before npm ci/));
 
-test("requires worker production dependencies to omit dev dependencies", expectMutationFailure({
-  mutateDockerfile: (dockerfile) => dockerfile.replace("RUN npm prune --omit=dev", "RUN npm prune"),
-}, /production-deps must prune development dependencies/));
+test("requires worker dependencies to use the minimal runtime set", expectMutationFailure({
+  mutateDockerfile: (dockerfile) => dockerfile.replace("bullmq@6.2.0 ioredis@6.0.0", "bullmq@6.2.0"),
+}, /worker dependencies must be installed from the minimal runtime set/));
 
 for (const [source, expectedError] of [
   ["COPY --from=build --chown=node:node /app/drizzle.config.ts ./drizzle.config.ts", /migrate must copy the Drizzle config/],

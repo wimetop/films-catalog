@@ -9,6 +9,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -19,8 +20,6 @@ services:
     environment:
       DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
     depends_on:
-      redis:
-        condition: service_healthy
       postgres:
         condition: service_healthy
         required: false
@@ -36,13 +35,12 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
       DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_LIST: ${CACHE_TTL_LIST:-60}
       CACHE_TTL_ITEM: ${CACHE_TTL_ITEM:-300}
       TRENDING_TOP_N: ${TRENDING_TOP_N:-10}
-      TRENDING_ITEMS_TTL_SECONDS: ${TRENDING_ITEMS_TTL_SECONDS:-900}
       TRENDING_REBUILD_CRON: ${TRENDING_REBUILD_CRON:-*/5 * * * *}
       TRUST_PROXY_FOR_RATE_LIMIT: ${TRUST_PROXY_FOR_RATE_LIMIT:-false}
     depends_on:
@@ -69,13 +67,12 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
       DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL_LIST: ${CACHE_TTL_LIST:-60}
       CACHE_TTL_ITEM: ${CACHE_TTL_ITEM:-300}
       TRENDING_TOP_N: ${TRENDING_TOP_N:-10}
-      TRENDING_ITEMS_TTL_SECONDS: ${TRENDING_ITEMS_TTL_SECONDS:-900}
       TRENDING_REBUILD_CRON: ${TRENDING_REBUILD_CRON:-*/5 * * * *}
       TRUST_PROXY_FOR_RATE_LIMIT: ${TRUST_PROXY_FOR_RATE_LIMIT:-false}
     depends_on:
@@ -85,7 +82,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const Redis=require('ioredis');const redis=new Redis(process.env.REDIS_URL,{connectTimeout:3000,maxRetriesPerRequest:1});redis.ping().then(()=>redis.quit()).then(()=>process.exit(0)).catch(()=>{redis.disconnect();process.exit(1)})\""]
+      test: ["CMD-SHELL", "node -e \"const Redis=require('ioredis');const r=new Redis(process.env.REDIS_URL,{connectTimeout:3000,maxRetriesPerRequest:1});r.get('cat:v1:worker:heartbeat').then(v=>r.quit().then(()=>process.exit(v&&Date.now()-Number(v)<30000?0:1))).catch(()=>{r.disconnect();process.exit(1)})\""]
       interval: 15s
       timeout: 5s
       retries: 4
@@ -109,6 +106,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
     networks:
       - app-network
 

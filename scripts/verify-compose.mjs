@@ -22,6 +22,10 @@ function requireMatch(value, pattern, description) {
   }
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function serviceContents(compose, service) {
   const match = compose.match(new RegExp(`^  ${service}:\\s*\\n([\\s\\S]*?)(?=^  [\\w-]+:\\s*$|^(?:volumes|networks):|(?![\\s\\S]))`, "m"));
   if (!match) {
@@ -66,11 +70,13 @@ for (const service of ["web", "worker"]) {
   requireMatch(compose, new RegExp(`  ${service}:\\s*[\\s\\S]*?stop_grace_period:\\s+\\d+s`), `${service} must set a bounded stop grace period.`);
 }
 
-requireMatch(compose, /migrate:[\s\S]*?depends_on:[\s\S]*?redis:\s*\n\s+condition:\s+service_healthy/, "migrate must wait for Redis health.");
 requireMatch(compose, /migrate:[\s\S]*?postgres:\s*\n\s+condition:\s+service_healthy[\s\S]*?required:\s+false/, "migrate must wait for local Postgres health when it is enabled.");
 requireMatch(compose, /migrate:[\s\S]*?DIRECT_URL:\s+\$\{DIRECT_URL:\?DIRECT_URL must be set in \.env\}/, "migrate must require an externally configured direct database URL.");
 requireMatch(compose, /web:[\s\S]*?healthcheck:[\s\S]*?\/api\/health/, "web must healthcheck /api/health.");
-requireMatch(compose, /worker:[\s\S]*?healthcheck:[\s\S]*?redis\.ping\(\)/, "worker must have a Redis liveness healthcheck.");
+requireMatch(compose, /worker:[\s\S]*?healthcheck:[\s\S]*?worker:heartbeat/, "worker must healthcheck a fresh worker heartbeat.");
+for (const service of ["redis", "postgres"]) {
+  requireMatch(compose, new RegExp(`  ${service}:\\s*[\\s\\S]*?restart:\\s+unless-stopped`), `${service} must restart unless stopped.`);
+}
 requireMatch(compose, /postgres:[\s\S]*?profiles:\s*\n\s+-\s+local-db/, "postgres must be opt-in through the local-db profile.");
 requireMatch(compose, /postgres:[\s\S]*?volumes:[\s\S]*?\.\/scripts\/init-local-postgres-roles\.sql:\/docker-entrypoint-initdb\.d\/10-create-api-roles\.sql:ro/, "local Postgres must initialize anon and authenticated roles before migrations.");
 requireMatch(compose, /seed:[\s\S]*?profiles:\s*\n\s+-\s+demo/, "seed must be opt-in through the demo profile.");
@@ -96,7 +102,7 @@ for (const [service, variables] of [
   for (const variable of variables) {
     requireMatch(
       serviceContents(localDbCompose, service),
-      new RegExp(`^      ${variable}:\\s+${RegExp.escape(localPostgresUrl)}$`, "m"),
+      new RegExp(`^      ${variable}:\\s+${escapeRegExp(localPostgresUrl)}$`, "m"),
       `the local-db override must force ${service}.${variable} to the private Postgres URL.`,
     );
   }

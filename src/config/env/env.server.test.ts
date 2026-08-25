@@ -40,4 +40,12 @@ describe("envServer", () => {
 
     await expect(import("./env.server")).rejects.toThrow("REDIS_URL");
   });
+
+  it("rejects an auth secret shorter than 32 characters during startup", async () => {
+    process.env.REDIS_URL = "redis://localhost:6379";
+    process.env.BETTER_AUTH_SECRET = "too-short";
+    vi.resetModules();
+
+    await expect(import("./env.server")).rejects.toThrow("BETTER_AUTH_SECRET");
+  });
 });

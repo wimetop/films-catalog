@@ -183,11 +183,12 @@ npm run docker:local:demo
 
 ### Health, logs і завершення
 
-`GET /api/health` перевіряє готовність БД. Якщо БД доступна і Redis доступний,
-відповідь — `200` зі статусом `ok`. Якщо Redis тимчасово недоступний, відповідь
-залишається `200` зі статусом `degraded`: каталог продовжує працювати через БД.
-Лише недоступна БД повертає `503` (`down`). Docker healthcheck web сервісу
-використовує саме цей endpoint.
+`GET /api/health` перевіряє готовність БД і Redis з короткими timeout. Відповідь
+`200 { status: "ok" }` можлива лише коли доступні обидва компоненти; будь-яка
+недоступність повертає `503 { status: "down" }`. Це readiness-контракт Docker.
+Звичайні каталогові запити при outage Redis і далі використовують fallback у БД.
+Worker healthcheck перевіряє свіжий heartbeat, а не окремий Redis ping: після
+перезапуску Redis Compose не вважатиме завислий BullMQ worker здоровим.
 
 ```bash
 npm run docker:logs
@@ -242,6 +243,7 @@ npm run docker:local:down
 | `npm run docker:up` | запустити стандартний external-DB stack у фоні |
 | `npm run docker:logs` | підписатися на логи Docker Compose сервісів |
 | `npm run docker:down` | коректно зупинити стандартний external-DB stack, зберігши named volumes |
+| `npm run verify` | lint, types, unit-тести та production Docker/worker статичні перевірки |
 
 ### Production migrations
 

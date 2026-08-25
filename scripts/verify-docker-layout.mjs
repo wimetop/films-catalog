@@ -88,11 +88,12 @@ for (const copyInstruction of web.match(/^COPY\s+.+$/gim) ?? []) {
   }
 }
 
+const workerDeps = stageContents(dockerfile, "worker-deps");
+requireMatch(workerDeps, /npm install --omit=dev --no-save bullmq@6\.2\.0 ioredis@6\.0\.0/, "worker dependencies must be installed from the minimal runtime set.");
 const worker = stageContents(dockerfile, "worker");
 requireMatch(worker, /COPY\s+--from=build\s+--chown=node:node\s+\/app\/dist\/worker\s+\.\/dist\/worker\s*$/im, "worker must copy the production CJS artifact.");
 requireMatch(worker, /^CMD\s+\["node",\s*"dist\/worker\/index\.js"\]$/im, "worker must start its CJS artifact with Node.");
-requireMatch(stageContents(dockerfile, "production-deps"), /^RUN\s+npm\s+prune\s+--omit=dev\s*$/im, "production-deps must prune development dependencies.");
-requireMatch(worker, /^COPY\s+--from=production-deps\s+--chown=node:node\s+\/app\/node_modules\s+\.\/node_modules\s*$/im, "worker must copy node_modules from production-deps.");
+requireMatch(worker, /^COPY\s+--from=worker-deps\s+--chown=node:node\s+\/runtime\/node_modules\s+\.\/node_modules\s*$/im, "worker must copy only its minimal runtime dependencies.");
 
 const migrate = stageContents(dockerfile, "migrate");
 requireMatch(migrate, /COPY\s+--from=build\s+--chown=node:node\s+\/app\/drizzle\s+\.\/drizzle\s*$/im, "migrate must copy checked-in SQL migrations with node ownership.");

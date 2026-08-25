@@ -14,6 +14,5 @@ export const outboxEvents = pgTable("outbox_events", {
   lastError: text("last_error"),
 }, (table) => [
   index("outbox_events_pending_idx").on(table.createdAt).where(sql`${table.deliveredAt} is null`),
-  index("outbox_events_delivered_idx").on(table.deliveredAt).where(sql`${table.deliveredAt} is not null`),
   index("outbox_events_terminal_idx").on(table.deliveredAt, table.deadLetteredAt).where(sql`${table.deliveredAt} is not null or ${table.deadLetteredAt} is not null`),
 ]);

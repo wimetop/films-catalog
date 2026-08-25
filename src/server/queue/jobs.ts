@@ -52,3 +52,14 @@ export async function enqueueCacheWarm(): Promise<void> {
     removeOnFail: failedRetention,
   });
 }
+
+export async function enqueueTrendingRebuild(): Promise<void> {
+  await getCatalogQueue().add(queueNames.trendingRebuild, {}, {
+    removeOnComplete: retention,
+    removeOnFail: failedRetention,
+  });
+}
+
+export async function enqueueWorkerLiveness(): Promise<void> {
+  await getCatalogQueue().add(queueNames.workerLiveness, {}, { removeOnComplete: retention, removeOnFail: failedRetention });
+}

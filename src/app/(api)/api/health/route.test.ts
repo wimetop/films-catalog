@@ -34,21 +34,21 @@ describe("GET /api/health", () => {
     });
   });
 
-  it("returns degraded 200 when only Redis is down", async () => {
+  it("returns 503 when Redis is down", async () => {
     mocks.dbExecute.mockResolvedValue([]);
     mocks.redisPing.mockRejectedValue(new Error("down"));
 
     const response = await GET();
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      status: "degraded",
+      status: "down",
       database: "ok",
       redis: "down",
     });
   });
 
-  it("returns degraded promptly when Redis ping never settles", async () => {
+  it("returns 503 promptly when Redis ping never settles", async () => {
     mocks.dbExecute.mockResolvedValue([]);
     mocks.redisPing.mockReturnValue(new Promise(() => undefined));
 
@@ -59,9 +59,9 @@ describe("GET /api/health", () => {
       }),
     ]);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      status: "degraded",
+      status: "down",
       database: "ok",
       redis: "down",
     });
