@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   multi: vi.fn(),
   zadd: vi.fn(),
   zrem: vi.fn(),
+  getFailed: vi.fn(),
 }));
 
 vi.mock("@/entities/favorite/api/server", () => ({
@@ -46,6 +47,10 @@ vi.mock("@/server/queue/jobs", () => ({
   enqueueFavoriteRecount: vi.fn(),
 }));
 
+vi.mock("@/server/queue/client", () => ({
+  getFavoritesQueue: () => ({ getFailed: mocks.getFailed }),
+}));
+
 import { processFavoriteRecount } from "./processors";
 
 describe("processFavoriteRecount", () => {
@@ -76,5 +81,14 @@ describe("processFavoriteRecount", () => {
     expect(mocks.zadd).not.toHaveBeenCalled();
     expect(mocks.del).toHaveBeenCalledWith("cat:v1:trending:top");
     expect(mocks.expire).not.toHaveBeenCalled();
+  });
+
+  it("fails the recount when Redis reports a command error from EXEC", async () => {
+    mocks.getFavoriteCountsForItems.mockResolvedValue([]);
+    mocks.exec.mockResolvedValue([[new Error("WRONGTYPE"), null]]);
+
+    await expect(processFavoriteRecount({
+      itemIds: ["0c7fc962-fc6f-4af2-a529-a5550a000003"],
+    })).rejects.toThrow("WRONGTYPE");
   });
 });

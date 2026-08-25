@@ -5,7 +5,7 @@ import { createWorkerHeartbeat } from "./heartbeat";
 describe("createWorkerHeartbeat", () => {
   afterEach(() => vi.useRealTimers());
 
-  it("refreshes only after a processed job and probes work on the liveness interval", async () => {
+  it("refreshes after a successful dependency probe", async () => {
     vi.useFakeTimers();
     const set = vi.fn().mockResolvedValue("OK");
     const heartbeat = createWorkerHeartbeat({ set }, "cat:v1:worker:heartbeat", 30);
@@ -16,7 +16,7 @@ describe("createWorkerHeartbeat", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     heartbeat.stop();
 
-    expect(set).toHaveBeenCalledOnce();
+    expect(set).toHaveBeenCalledTimes(2);
     expect(probe).toHaveBeenCalledOnce();
     expect(set).toHaveBeenLastCalledWith("cat:v1:worker:heartbeat", expect.any(String), "EX", 30);
   });

@@ -33,7 +33,7 @@ describe("Redis cache client", () => {
 
     expect(options).toMatchObject({
       lazyConnect: true,
-      enableOfflineQueue: true,
+      enableOfflineQueue: false,
       maxRetriesPerRequest: 2,
     });
     expect(options.retryStrategy(1)).toBeGreaterThanOrEqual(200);

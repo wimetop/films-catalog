@@ -6,9 +6,10 @@ export function createWorkerHeartbeat(redis: RedisSetter, key: string, ttlSecond
   let timer: ReturnType<typeof setInterval> | undefined;
   let lastProcessedAt = Date.now();
 
-  const refresh = () => {
-    lastProcessedAt = Date.now();
-    return redis.set(key, String(lastProcessedAt), "EX", ttlSeconds);
+  const refresh = async () => {
+    const refreshedAt = Date.now();
+    await redis.set(key, String(refreshedAt), "EX", ttlSeconds);
+    lastProcessedAt = refreshedAt;
   };
 
   return {
@@ -20,9 +21,11 @@ export function createWorkerHeartbeat(redis: RedisSetter, key: string, ttlSecond
           onStale();
           return;
         }
-        void probe().catch((error) => {
-          console.error("Worker liveness probe enqueue failed", { message: error instanceof Error ? error.message : String(error) });
-        });
+        void probe()
+          .then(refresh)
+          .catch((error) => {
+            console.error("Worker dependency probe failed", { message: error instanceof Error ? error.message : String(error) });
+          });
       }, Math.floor((ttlSeconds * 1_000) / 3));
     },
     stop() {

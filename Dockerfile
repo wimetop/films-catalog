@@ -14,6 +14,10 @@ WORKDIR /runtime
 # manifest prevents Better Auth's transitive developer tooling entering worker.
 RUN npm init -y && npm install --omit=dev --no-save bullmq@6.2.0 ioredis@6.0.0
 
+FROM base AS migrate-deps
+WORKDIR /runtime
+RUN npm init -y && npm install --omit=dev --no-save drizzle-kit@0.31.10 drizzle-orm@0.45.2 postgres@3.4.9 dotenv@17.4.2
+
 FROM deps AS build
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
@@ -49,7 +53,7 @@ CMD ["node", "dist/worker/index.js"]
 FROM base AS migrate
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=migrate-deps --chown=node:node /runtime/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=build --chown=node:node /app/src/db/schema ./src/db/schema
 COPY --from=build --chown=node:node /app/drizzle ./drizzle

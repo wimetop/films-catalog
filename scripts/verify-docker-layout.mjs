@@ -99,7 +99,7 @@ const migrate = stageContents(dockerfile, "migrate");
 requireMatch(migrate, /COPY\s+--from=build\s+--chown=node:node\s+\/app\/drizzle\s+\.\/drizzle\s*$/im, "migrate must copy checked-in SQL migrations with node ownership.");
 requireMatch(migrate, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/drizzle\.config\.ts\s+\.\/drizzle\.config\.ts\s*$/im, "migrate must copy the Drizzle config.");
 requireMatch(migrate, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/src\/db\/schema\s+\.\/src\/db\/schema\s*$/im, "migrate must copy the Drizzle schema.");
-requireMatch(migrate, /^COPY\s+--from=deps\s+--chown=node:node\s+\/app\/node_modules\s+\.\/node_modules\s*$/im, "migrate must copy Drizzle Kit from deps.");
+requireMatch(migrate, /^COPY\s+--from=migrate-deps\s+--chown=node:node\s+\/runtime\/node_modules\s+\.\/node_modules\s*$/im, "migrate must copy only its isolated migration dependencies.");
 
 const seed = stageContents(dockerfile, "seed");
 requireMatch(seed, /^USER\s+node$/im, "the seed target must run as node.");
