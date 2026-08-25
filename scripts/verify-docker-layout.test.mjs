@@ -57,7 +57,7 @@ test("requires worker dependencies to use the minimal runtime set", expectMutati
 for (const [source, expectedError] of [
   ["COPY --from=build --chown=node:node /app/drizzle.config.ts ./drizzle.config.ts", /migrate must copy the Drizzle config/],
   ["COPY --from=build --chown=node:node /app/src/db/schema ./src/db/schema", /migrate must copy the Drizzle schema/],
-  ["COPY --from=deps --chown=node:node /app/node_modules ./node_modules", /migrate must copy Drizzle Kit/],
+  ["COPY --from=migrate-deps --chown=node:node /runtime/node_modules ./node_modules", /migrate must copy only its isolated migration dependencies/],
 ]) {
   test(`requires migration input ${source}`, expectMutationFailure({
     mutateDockerfile: (dockerfile) => dockerfile.replace(source, `# ${source}`),

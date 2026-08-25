@@ -4,7 +4,7 @@ import { envServer } from "@/config/env";
 import { db } from "@/db";
 import { items } from "@/db/schema";
 import { readThroughCache, withRedisTimeout } from "@/server/cache/cache-aside";
-import { canUseRedis } from "@/server/cache/circuit-breaker";
+import { canUseRedis, markRedisUnavailable } from "@/server/cache/circuit-breaker";
 import { cacheMissDatabaseSemaphore } from "@/server/cache/database-semaphore";
 import { redis } from "@/server/cache/client";
 import { cacheKeys } from "@/server/cache/keys";
@@ -38,6 +38,7 @@ export async function getItems(page?: number, pageSize?: number): Promise<Item[]
   try {
     version = await withRedisTimeout(redis.get(cacheKeys.catalogVersion()));
   } catch (error) {
+    markRedisUnavailable();
     console.warn("Catalog cache version read failed; bypassing Redis cache", {
       message: error instanceof Error ? error.message : String(error),
     });

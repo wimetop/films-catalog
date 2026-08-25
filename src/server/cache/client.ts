@@ -20,7 +20,10 @@ function redisRetryStrategy(attempt: number): number {
 
 export const redis = globalForRedis.redis ?? new Redis(envServer.redisUrl, {
   connectTimeout: 5_000,
-  enableOfflineQueue: true,
+  // This client is used only for cache, rate-limit, and heartbeat commands.
+  // Queue clients own their reconnecting BullMQ connections. Do not retain an
+  // unbounded backlog of cache commands while Redis is unavailable.
+  enableOfflineQueue: false,
   lazyConnect: true,
   maxRetriesPerRequest: 2,
   retryStrategy: redisRetryStrategy,

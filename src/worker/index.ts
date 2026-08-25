@@ -1,13 +1,14 @@
 import { Worker } from "bullmq";
 
 import { envServer } from "@/config/env";
+import { dbClient } from "@/db";
 import { redis } from "@/server/cache/client";
 import { getCatalogQueue, getFavoritesQueue } from "@/server/queue/client";
 import { queueNames } from "@/server/queue/names";
-import { enqueueCacheWarm, enqueueTrendingRebuild, enqueueWorkerLiveness, registerOutboxPublisher, registerTrendingRebuild } from "@/server/queue/jobs";
+import { enqueueCacheWarm, enqueueTrendingRebuild, registerOutboxPublisher, registerTrendingRebuild } from "@/server/queue/jobs";
 import { cacheKeys } from "@/server/cache/keys";
 
-import { processCacheWarm, processFavoriteRecount, processOutboxCleanup, processOutboxPublish, processTrendingRebuild } from "./processors";
+import { processCacheWarm, processFailedFavoriteRecounts, processFavoriteRecount, processOutboxCleanup, processOutboxPublish, processTrendingRebuild } from "./processors";
 import { createWorkerHeartbeat } from "./heartbeat";
 
 const connection = { url: envServer.redisUrl, connectTimeout: 5_000, maxRetriesPerRequest: null };
@@ -36,8 +37,13 @@ const catalogWorker = new Worker(queueNames.catalog, async (job) => {
     case queueNames.outboxCleanup:
       await processOutboxCleanup();
       break;
-    case queueNames.workerLiveness:
+    case queueNames.favoritesReconcile:
+      await processFailedFavoriteRecounts();
       break;
+    case queueNames.workerLiveness:
+      // A queued probe proves only that Redis/BullMQ are alive. Do not turn an
+      // old queued liveness job into a false-positive database readiness signal.
+      return;
     default:
       throw new Error(`Unsupported catalog job: ${job.name}`);
   }
@@ -76,13 +82,18 @@ function fatal(message: string, error: unknown) {
 
 redis.on("end", () => fatal("Worker Redis connection ended", new Error("Redis connection ended")));
 
+async function probeDependencies(): Promise<void> {
+  await Promise.all([dbClient.unsafe("select 1"), redis.ping()]);
+}
+
 async function bootstrap() {
   if (redis.status === "wait") await redis.connect();
+  await probeDependencies();
+  await heartbeat.refresh();
   await registerTrendingRebuild();
   await registerOutboxPublisher();
   await Promise.all([catalogWorker.waitUntilReady(), favoritesWorker.waitUntilReady()]);
-  heartbeat.start(enqueueWorkerLiveness, () => fatal("Worker liveness probe was not processed", new Error("Heartbeat expired")));
-  await enqueueWorkerLiveness();
+  heartbeat.start(probeDependencies, () => fatal("Worker dependency heartbeat expired", new Error("Heartbeat expired")));
   await enqueueCacheWarm();
   await enqueueTrendingRebuild();
   console.info("Worker ready", { queues: [queueNames.catalog, queueNames.favorites] });

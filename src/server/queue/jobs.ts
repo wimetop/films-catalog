@@ -18,7 +18,6 @@ export async function enqueueFavoriteRecount(data: FavoriteRecountJob): Promise<
     removeOnFail: failedRetention,
   });
 }
-
 export async function registerTrendingRebuild(): Promise<void> {
   const queue = getCatalogQueue();
   const schedulerId = "trending:rebuild:scheduled";
@@ -44,6 +43,11 @@ export async function registerOutboxPublisher(): Promise<void> {
     data: {},
     opts: { removeOnComplete: retention, removeOnFail: failedRetention },
   });
+  await queue.upsertJobScheduler("favorites:reconcile:scheduled", { every: 60_000 }, {
+    name: queueNames.favoritesReconcile,
+    data: {},
+    opts: { removeOnComplete: retention, removeOnFail: failedRetention },
+  });
 }
 
 export async function enqueueCacheWarm(): Promise<void> {
@@ -58,8 +62,4 @@ export async function enqueueTrendingRebuild(): Promise<void> {
     removeOnComplete: retention,
     removeOnFail: failedRetention,
   });
-}
-
-export async function enqueueWorkerLiveness(): Promise<void> {
-  await getCatalogQueue().add(queueNames.workerLiveness, {}, { removeOnComplete: retention, removeOnFail: failedRetention });
 }

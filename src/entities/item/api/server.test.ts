@@ -4,7 +4,7 @@ const dbMocks = vi.hoisted(() => ({
   select: vi.fn(),
 }));
 const cacheMocks = vi.hoisted(() => ({ readThroughCache: vi.fn(), withRedisTimeout: <T>(operation: Promise<T>) => operation }));
-const circuitMocks = vi.hoisted(() => ({ canUseRedis: vi.fn(() => true) }));
+const circuitMocks = vi.hoisted(() => ({ canUseRedis: vi.fn(() => true), markRedisUnavailable: vi.fn() }));
 const redisMocks = vi.hoisted(() => ({ get: vi.fn(async () => "1") }));
 
 vi.mock("server-only", () => ({}));
@@ -62,6 +62,7 @@ describe("getItemById", () => {
     await expect(getItems()).resolves.toEqual([]);
 
     expect(cacheMocks.readThroughCache).not.toHaveBeenCalled();
+    expect(circuitMocks.markRedisUnavailable).toHaveBeenCalledOnce();
   });
 
   it("bypasses Redis version lookup while the cache circuit is open", async () => {

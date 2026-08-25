@@ -92,7 +92,7 @@ export async function getFavoriteCountsForItems(itemIds: string[]): Promise<Arra
 export async function publishPendingOutboxEvents(workerId: string, enqueue: (itemIds: string[]) => Promise<void>): Promise<void> {
   const events = await db.transaction(async (tx) => (await tx.execute(sql`
     UPDATE outbox_events SET claimed_at = now(), claimed_by = ${workerId}, attempts = attempts + 1
-    WHERE id IN (SELECT id FROM outbox_events WHERE delivered_at IS NULL AND dead_lettered_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - interval '5 minutes') ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 100)
+    WHERE id IN (SELECT id FROM outbox_events WHERE type = 'favorites:recount' AND delivered_at IS NULL AND dead_lettered_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - interval '5 minutes') ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 100)
     RETURNING id, payload, attempts
   `)) as unknown as Array<{ id: string; payload: { itemId: string }; attempts: number }>);
   if (events.length === 0) return;

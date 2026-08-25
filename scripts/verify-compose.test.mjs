@@ -106,7 +106,7 @@ test("local-db override forces every database consumer to the private Postgres s
   for (const service of ["migrate", "web", "worker", "seed"]) {
     expect(localDbCompose).toMatch(new RegExp(`^  ${service}:\\s*[\\s\\S]*?postgres:5432\\/filmscatalog`, "m"));
   }
-  expect(localDbCompose.match(new RegExp(postgresUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(6);
+  expect(localDbCompose.match(new RegExp(postgresUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(8);
 });
 
 test("rejects an internal-only application network", async () => {
