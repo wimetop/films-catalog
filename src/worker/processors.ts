@@ -69,7 +69,11 @@ export async function processFailedFavoriteRecounts(): Promise<void> {
   const failedJobs = await getFavoritesQueue().getFailed(0, 99);
   for (const job of failedJobs) {
     const data = job.data as { itemIds?: unknown };
-    if (!Array.isArray(data.itemIds) || !data.itemIds.every((itemId) => typeof itemId === "string")) continue;
+    if (!Array.isArray(data.itemIds) || !data.itemIds.every((itemId) => typeof itemId === "string")) {
+      console.error("Invalid failed favorite recount job", { id: job.id });
+      await job.remove();
+      continue;
+    }
     await enqueueFavoriteRecount({ itemIds: data.itemIds });
     await job.remove();
   }

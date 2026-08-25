@@ -210,6 +210,41 @@ npm run docker:local:down
 Ця команда зберігає named volumes Redis і Postgres. Додавайте `-v` лише якщо
 свідомо хочете незворотно видалити локальні Redis/Postgres дані.
 
+### Recovery Redis і worker
+
+Redis та Postgres у Compose pinned за digest, тому однакова конфігурація не
+отримує непомітно інший upstream image. Worker і migration image встановлюють
+тільки власні locked runtime залежності через `npm ci --omit=dev`.
+
+При restart Redis із збереженим volume BullMQ scheduler-и відновлюються з AOF.
+Якщо Redis було очищено (`FLUSHALL`) або volume втрачено, worker після reconnect
+повторно створює scheduler-и `outbox:publish`, `favorites:reconcile`,
+`outbox:cleanup` і trending cron до запису нового heartbeat. Тому pending
+`outbox_events` не залишаються без publisher-а при green worker health.
+
+Зупинка worker-а має внутрішній deadline 55 секунд, менший за Compose
+`stop_grace_period: 60s`. Якщо дренування не завершується, worker логує
+`worker.shutdown.timeout`, від'єднує Redis/BullMQ clients і виходить з кодом 1;
+`restart: unless-stopped` запускає чистий процес. Для нормального shutdown
+очікуйте `worker.shutdown.completed` або код завершення 0.
+
+### Docker verification sequence
+
+Перед локальним запуском та в CI використовуйте:
+
+```bash
+npm ci
+Copy-Item .env.example .env # PowerShell; Linux/macOS: cp .env.example .env
+npm run verify
+npm run docker:local:up
+npm run test:cache-worker:docker
+npm run docker:local:down
+```
+
+`npm run verify` виконує lint, TypeScript, unit tests, worker artifact checks,
+Compose/Docker layout checks та перевірку `.env` password contract. Інтеграційний
+тест створює favorite і перевіряє шлях Postgres outbox → BullMQ → Redis ZSET.
+
 ### Типові помилки запуску
 
 | Повідомлення | Причина та дія |

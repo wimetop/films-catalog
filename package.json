@@ -25,7 +25,7 @@
     "verify:compose": "node scripts/verify-compose.mjs",
     "verify:docker-env": "node scripts/verify-docker-env.mjs",
     "verify:docker-layout": "node scripts/verify-docker-layout.mjs",
-    "verify": "npm run lint && npx tsc --noEmit && npm test && npm run build:worker && npm run verify:worker-build && npm run verify:compose && npm run verify:docker-layout",
+    "verify": "npm run lint && npx tsc --noEmit && npm test && npm run build:worker && npm run verify:worker-build && npm run verify:compose && npm run verify:docker-layout && npm run verify:docker-env",
     "docker:build": "npm run verify:docker-env && npm run verify:compose && npm run verify:docker-layout && docker compose build",
     "docker:up": "npm run verify:docker-env && npm run verify:compose && npm run verify:docker-layout && docker compose up -d --wait",
     "docker:down": "docker compose stop web worker && docker compose stop redis postgres && docker compose down",

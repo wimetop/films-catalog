@@ -1,0 +1,1 @@
+{"name":"filmscatalog-worker-runtime","private":true,"dependencies":{"bullmq":"6.2.0","ioredis":"6.0.0"}}

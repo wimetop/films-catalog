@@ -89,12 +89,16 @@ for (const copyInstruction of web.match(/^COPY\s+.+$/gim) ?? []) {
 }
 
 const workerDeps = stageContents(dockerfile, "worker-deps");
-requireMatch(workerDeps, /npm install --omit=dev --no-save bullmq@6\.2\.0 ioredis@6\.0\.0/, "worker dependencies must be installed from the minimal runtime set.");
+requireMatch(workerDeps, /COPY docker\/worker-runtime\/package\.json docker\/worker-runtime\/package-lock\.json \.\//, "worker dependencies must copy their committed manifest and lockfile.");
+requireMatch(workerDeps, /npm ci --omit=dev/, "worker dependencies must install from their lockfile.");
 const worker = stageContents(dockerfile, "worker");
 requireMatch(worker, /COPY\s+--from=build\s+--chown=node:node\s+\/app\/dist\/worker\s+\.\/dist\/worker\s*$/im, "worker must copy the production CJS artifact.");
 requireMatch(worker, /^CMD\s+\["node",\s*"dist\/worker\/index\.js"\]$/im, "worker must start its CJS artifact with Node.");
 requireMatch(worker, /^COPY\s+--from=worker-deps\s+--chown=node:node\s+\/runtime\/node_modules\s+\.\/node_modules\s*$/im, "worker must copy only its minimal runtime dependencies.");
 
+const migrateDeps = stageContents(dockerfile, "migrate-deps");
+requireMatch(migrateDeps, /COPY docker\/migrate-runtime\/package\.json docker\/migrate-runtime\/package-lock\.json \.\//, "migration dependencies must copy their committed manifest and lockfile.");
+requireMatch(migrateDeps, /npm ci --omit=dev/, "migration dependencies must install from their lockfile.");
 const migrate = stageContents(dockerfile, "migrate");
 requireMatch(migrate, /COPY\s+--from=build\s+--chown=node:node\s+\/app\/drizzle\s+\.\/drizzle\s*$/im, "migrate must copy checked-in SQL migrations with node ownership.");
 requireMatch(migrate, /^COPY\s+--from=build\s+--chown=node:node\s+\/app\/drizzle\.config\.ts\s+\.\/drizzle\.config\.ts\s*$/im, "migrate must copy the Drizzle config.");

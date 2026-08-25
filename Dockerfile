@@ -10,13 +10,13 @@ RUN npm prune --omit=dev
 
 FROM base AS worker-deps
 WORKDIR /runtime
-# The bundle externalizes only BullMQ and ioredis. Installing from a clean
-# manifest prevents Better Auth's transitive developer tooling entering worker.
-RUN npm init -y && npm install --omit=dev --no-save bullmq@6.2.0 ioredis@6.0.0
+COPY docker/worker-runtime/package.json docker/worker-runtime/package-lock.json ./
+RUN npm ci --omit=dev
 
 FROM base AS migrate-deps
 WORKDIR /runtime
-RUN npm init -y && npm install --omit=dev --no-save drizzle-kit@0.31.10 drizzle-orm@0.45.2 postgres@3.4.9 dotenv@17.4.2
+COPY docker/migrate-runtime/package.json docker/migrate-runtime/package-lock.json ./
+RUN npm ci --omit=dev
 
 FROM deps AS build
 ARG NEXT_PUBLIC_APP_URL

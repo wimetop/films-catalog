@@ -10,6 +10,7 @@ import { cacheKeys } from "@/server/cache/keys";
 
 import { processCacheWarm, processFailedFavoriteRecounts, processFavoriteRecount, processOutboxCleanup, processOutboxPublish, processTrendingRebuild } from "./processors";
 import { createWorkerHeartbeat } from "./heartbeat";
+import { createWorkerRuntime } from "./runtime";
 
 const connection = { url: envServer.redisUrl, connectTimeout: 5_000, maxRetriesPerRequest: null };
 const heartbeat = createWorkerHeartbeat(redis, cacheKeys.workerHeartbeat());
@@ -86,18 +87,42 @@ async function probeDependencies(): Promise<void> {
   await Promise.all([dbClient.unsafe("select 1"), redis.ping()]);
 }
 
+async function registerSchedulers(): Promise<void> {
+  await Promise.all([registerTrendingRebuild(), registerOutboxPublisher()]);
+}
+
+const runtime = createWorkerRuntime({
+  probeDependencies,
+  registerSchedulers,
+  refreshHeartbeat: heartbeat.refresh,
+  closeResources: async () => {
+    await Promise.all([catalogWorker.close(), favoritesWorker.close()]);
+    heartbeat.stop();
+    await Promise.all([getCatalogQueue().close(), getFavoritesQueue().close(), redis.quit()]);
+  },
+  disconnectResources: async () => {
+    catalogWorker.disconnect();
+    favoritesWorker.disconnect();
+    getCatalogQueue().disconnect();
+    getFavoritesQueue().disconnect();
+    redis.disconnect();
+  },
+  exit: (code) => process.exit(code),
+});
+
 async function bootstrap() {
   if (redis.status === "wait") await redis.connect();
-  await probeDependencies();
-  await heartbeat.refresh();
-  await registerTrendingRebuild();
-  await registerOutboxPublisher();
+  await runtime.recoverSchedulers();
   await Promise.all([catalogWorker.waitUntilReady(), favoritesWorker.waitUntilReady()]);
   heartbeat.start(probeDependencies, () => fatal("Worker dependency heartbeat expired", new Error("Heartbeat expired")));
   await enqueueCacheWarm();
   await enqueueTrendingRebuild();
   console.info("Worker ready", { queues: [queueNames.catalog, queueNames.favorites] });
 }
+
+redis.on("ready", () => {
+  if (!terminating) void runtime.recoverSchedulers().catch((error) => fatal("Worker scheduler recovery failed", error));
+});
 
 void bootstrap().catch((error) => {
   console.error("Worker bootstrap failed", { error });
@@ -107,12 +132,7 @@ void bootstrap().catch((error) => {
 async function shutdown(signal: string) {
   console.info("Worker shutting down", { signal });
   terminating = true;
-  await Promise.all([catalogWorker.close(), favoritesWorker.close()]);
-  heartbeat.stop();
-  await Promise.all([getCatalogQueue().close(), getFavoritesQueue().close()]);
-  await redis.quit();
-  console.info("worker.shutdown.completed", { signal });
-  process.exit(0);
+  await runtime.shutdown(signal);
 }
 
 process.once("SIGTERM", () => void shutdown("SIGTERM"));

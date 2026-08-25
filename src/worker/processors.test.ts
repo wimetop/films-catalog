@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   multi: vi.fn(),
   zadd: vi.fn(),
   zrem: vi.fn(),
-  getFailed: vi.fn(),
+  getFailed: vi.fn(), remove: vi.fn(),
 }));
 
 vi.mock("@/entities/favorite/api/server", () => ({
@@ -51,7 +51,7 @@ vi.mock("@/server/queue/client", () => ({
   getFavoritesQueue: () => ({ getFailed: mocks.getFailed }),
 }));
 
-import { processFavoriteRecount } from "./processors";
+import { processFailedFavoriteRecounts, processFavoriteRecount } from "./processors";
 
 describe("processFavoriteRecount", () => {
   beforeEach(() => {
@@ -90,5 +90,16 @@ describe("processFavoriteRecount", () => {
     await expect(processFavoriteRecount({
       itemIds: ["0c7fc962-fc6f-4af2-a529-a5550a000003"],
     })).rejects.toThrow("WRONGTYPE");
+  });
+
+  it("removes malformed failed jobs so they cannot block later recounts", async () => {
+    const invalid = { id: "invalid", data: {}, remove: mocks.remove };
+    const valid = { id: "valid", data: { itemIds: ["0c7fc962-fc6f-4af2-a529-a5550a000003"] }, remove: vi.fn() };
+    mocks.getFailed.mockResolvedValue([invalid, valid]);
+    const jobs = await import("@/server/queue/jobs");
+    await processFailedFavoriteRecounts();
+    expect(mocks.remove).toHaveBeenCalledOnce();
+    expect(jobs.enqueueFavoriteRecount).toHaveBeenCalledWith({ itemIds: ["0c7fc962-fc6f-4af2-a529-a5550a000003"] });
+    expect(valid.remove).toHaveBeenCalledOnce();
   });
 });
