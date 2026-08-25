@@ -125,6 +125,25 @@ services:
     networks:
       - app-network
 
+  verify-cache-worker:
+    build:
+      context: .
+      target: verify-cache-worker
+    profiles:
+      - verify
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      DIRECT_URL: ${DIRECT_URL:?DIRECT_URL must be set in .env}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set in .env}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      worker:
+        condition: service_healthy
+    networks:
+      - app-network
+
 volumes:
   redis-data:
   postgres-data:

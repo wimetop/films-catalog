@@ -30,7 +30,8 @@
     "docker:dev-redis:up": "docker compose -p filmscatalog-dev-redis -f docker-compose.dev-redis.yml up -d",
     "docker:dev-redis:down": "docker compose -p filmscatalog-dev-redis -f docker-compose.dev-redis.yml down",
     "docker:local:up": "npm run verify:docker-env && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db up --build -d --wait",
-    "docker:local:demo": "npm run verify:docker-env && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db --profile demo up --build -d --wait",
+    "docker:local:demo": "npm run verify:docker-env && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db up --build -d --wait && docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db --profile demo up -d seed",
+    "test:cache-worker:docker": "docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db --profile verify run --rm verify-cache-worker",
     "docker:local:down": "docker compose -f docker-compose.yml -f docker-compose.local-db.yml --profile local-db down"
   },
   "dependencies": {

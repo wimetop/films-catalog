@@ -50,7 +50,7 @@ if (fromLines.length === 0) {
 
 for (const fromLine of fromLines) {
   const image = fromLine.replace(/^FROM\s+/i, "").split(/\s+(?:AS\s+)?/i)[0];
-  if (image !== nodeImage && image !== "base" && image !== "deps" && image !== "migrate") {
+  if (image !== nodeImage && image !== "base" && image !== "deps" && image !== "migrate" && image !== "build") {
     fail(`unpinned or unexpected base image in: ${fromLine}`);
   }
 }

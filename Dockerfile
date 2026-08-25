@@ -62,3 +62,9 @@ COPY --from=build --chown=node:node /app/scripts/seed.ts ./scripts/seed.ts
 COPY --from=build --chown=node:node /app/src/db/client.ts ./src/db/client.ts
 USER node
 CMD ["./node_modules/.bin/tsx", "scripts/seed.ts"]
+
+FROM build AS verify-cache-worker
+WORKDIR /app
+ENV NODE_ENV=production
+USER node
+CMD ["./node_modules/.bin/tsx", "scripts/verify-cache-worker-flow.ts"]

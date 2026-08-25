@@ -190,6 +190,9 @@ npm run docker:local:demo
 Worker healthcheck перевіряє свіжий heartbeat, а не окремий Redis ping: після
 перезапуску Redis Compose не вважатиме завислий BullMQ worker здоровим.
 
+Списки застосовують stale-while-revalidate: значення свіжі 60 секунд, після чого
+ще до 30 секунд можуть бути віддані як stale, поки background refresh оновлює кеш.
+
 ```bash
 npm run docker:logs
 npm run docker:down
